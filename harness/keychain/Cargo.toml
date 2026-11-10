@@ -1,0 +1,10 @@
+[package]
+name = "keychain-harness"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+serde_json = "1"
+solana-keychain = { path = "../../keychain/rust", default-features = false, features = ["ledger", "sdk-v3"] }
+tokio = { version = "1", features = ["rt", "macros"] }

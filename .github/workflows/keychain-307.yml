@@ -1,0 +1,93 @@
+name: keychain-307
+on: push
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        commit: [004999a, 0b7bf83, 4db0db2]
+    env:
+      COMMIT: ${{ matrix.commit }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: caliperforge/solana-keychain
+          path: keychain
+          fetch-depth: 0
+      - run: git -C keychain checkout --detach "$COMMIT"
+      - run: sudo apt-get install -y -qq libudev-dev pkg-config strace
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cp keychain/rust/Cargo.lock harness/keychain/
+      - run: cargo build --release
+        working-directory: harness/keychain
+      - uses: ./
+        id: rig
+        with:
+          count: 2
+      - id: keys
+        run: |
+          "$RUNNER_TEMP/ledger-rig/bin/pip" install solders==0.27.0
+          "$RUNNER_TEMP/ledger-rig/bin/python" - >> "$GITHUB_OUTPUT" <<'EOF'
+          import hashlib
+          from solders.keypair import Keypair
+          from ledger_rig.seeds import SEEDS
+          keys = []
+          for mnemonic in SEEDS:
+              seed = hashlib.pbkdf2_hmac("sha512", mnemonic.encode(), b"mnemonic", 2048)
+              keypair = Keypair.from_seed_and_derivation_path(seed, "m/44'/501'/0'")
+              keys.append(str(keypair.pubkey()))
+          print("keys=" + " ".join(keys))
+          EOF
+      - env:
+          HIDRAW: ${{ steps.rig.outputs.hidraw }}
+          KEYS: ${{ steps.keys.outputs.keys }}
+        run: |
+          for scenario in A B C D; do
+            status=0
+            sudo strace -f -qq -e trace=openat -o "trace-$scenario" \
+              harness/keychain/target/release/keychain-harness "$scenario" "$COMMIT" $HIDRAW $KEYS \
+              > "line-$scenario" || status=$?
+            if [ ! -s "line-$scenario" ]; then
+              jq -nc --arg commit "$COMMIT" --arg scenario "$scenario" --arg error "no result (exit $status)" \
+                '{$commit, $scenario, pass: false, $error}' > "line-$scenario"
+            fi
+            opens=$(grep -c '"/dev/hidraw' "trace-$scenario" || true)
+            jq -c --argjson opens "$opens" '. + {hid_opens: $opens}' "line-$scenario" >> "results-$COMMIT.jsonl"
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: results-${{ matrix.commit }}
+          path: results-${{ matrix.commit }}.jsonl
+  table:
+    needs: run
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: results-*
+          merge-multiple: true
+          path: results
+      - run: |
+          shopt -s nullglob
+          jq -rs '
+            def cell: tostring | gsub("\\|"; "\\|") | gsub("\n"; " ");
+            "| commit | scenario | result | error | wall ms | HID opens |",
+            "|---|---|---|---|---|---|",
+            (. as $rows | ("004999a", "0b7bf83", "4db0db2") as $c | ("A", "B", "C", "D") as $s
+              | ($rows | map(select(.commit == $c and .scenario == $s)) | first) as $r
+              | if $r == null then "| \($c) | \($s) | missing | | | |"
+                else "| \($c) | \($s) | \(if $r.pass then "pass" else "fail" end) | \($r.error // "" | cell) | \($r.wall_ms // "") | \($r.hid_opens // "") |"
+                end)
+          ' /dev/null results/*.jsonl > results.md
+      - uses: actions/upload-artifact@v4
+        with:
+          name: results
+          path: results.md
+      - run: |
+          for scenario in A B C D; do
+            grep -q "^| 4db0db2 | $scenario | pass |" results.md
+          done

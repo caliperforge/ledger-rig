@@ -6,9 +6,9 @@ UHID_CREATE2 = 11
 UHID_INPUT2 = 12
 EVENT_SIZE = 4376
 
-# vendor usage page 0xFFA0, 64-byte input and output reports
+# vendor usage page 0xFF00, 64-byte input and output reports
 REPORT_DESCRIPTOR = bytes.fromhex(
-    "06a0ff 0901 a101"
+    "0600ff 0901 a101"
     " 0903 1500 26ff00 7508 9540 8108"
     " 0904 1500 26ff00 7508 9540 9108"
     " c0"
