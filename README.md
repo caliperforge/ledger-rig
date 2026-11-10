@@ -1,6 +1,6 @@
 # ledger-rig
 
-Bridges a Speculos APDU socket to a USB HID Ledger device on Linux.
+Runs Solana Ledger Nano S Plus devices on Linux for tests: each is a Speculos emulator bridged through uhid to a USB HID Ledger device, opened by clients as `/dev/hidraw*`.
 
 ## Requirements
 
@@ -17,6 +17,14 @@ pip install -e .
 ## Usage
 
 ```sh
+bash scripts/build-solana-app.sh <tag>
+sudo python -m ledger_rig up --count 2 --app apps/solana-nanosp-<tag>.elf
+sudo python -m ledger_rig down
+```
+
+`up` starts one Speculos container and one bridge per device and prints `<hidraw> <serial> <apdu port>` for each. `down` removes the containers; their bridges exit with them.
+
+```sh
 sudo python -m ledger_rig bridge --apdu 127.0.0.1:9999 --serial 0001
 ```
 
@@ -30,6 +38,27 @@ The bridge logs one line per APDU, command then response with its status word:
 ```
 
 It exits once the APDU socket closes.
+
+## GitHub Action
+
+```yaml
+- uses: caliperforge/ledger-rig@v0
+  id: rig
+  with:
+    count: 2
+- run: pytest
+  env:
+    LEDGER_HIDRAW: ${{ steps.rig.outputs.hidraw }}
+```
+
+`hidraw` holds the device paths, space-separated, readable and writable by the job user. `app-tag` sets the app-solana commit; its ELF is built once and cached. The devices are removed after the job's main steps.
+
+## Limits
+
+- Linux only, with root for uhid
+- hidraw behaviour only, not USB descriptors or macOS IOKit
+- At most 2 devices
+- Nano S Plus only
 
 ## Tests
 

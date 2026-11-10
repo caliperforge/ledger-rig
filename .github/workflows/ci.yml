@@ -25,3 +25,23 @@ jobs:
       - run: sudo apt-get install -y -qq libhidapi-hidraw0
       - run: sudo modprobe uhid
       - run: sudo SOLANA_APP_TAG="$SOLANA_APP_TAG" "$(which python)" -m pytest -m uhid
+  action:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./post
+        with:
+          run: test -z "$(docker ps -q --filter label=ledger-rig)"
+      - uses: ./
+        id: rig
+        with:
+          count: 2
+      - env:
+          HIDRAW: ${{ steps.rig.outputs.hidraw }}
+        run: |
+          set -- $HIDRAW
+          test $# -eq 2
+          for path; do
+            test -c "$path"
+            test -r "$path" -a -w "$path"
+          done

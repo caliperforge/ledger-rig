@@ -1,0 +1,10 @@
+name: ledger-rig post
+description: Runs a bash command among the job's post steps
+inputs:
+  run:
+    description: Bash command to run after the job's main steps
+    required: true
+runs:
+  using: node24
+  main: index.js
+  post: index.js

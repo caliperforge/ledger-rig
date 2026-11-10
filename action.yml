@@ -1,0 +1,47 @@
+name: ledger-rig
+description: Brings up Speculos Solana Ledger Nano S Plus devices as hidraw devices
+inputs:
+  count:
+    description: Number of devices, at most 2
+    required: true
+  app-tag:
+    description: app-solana commit the ELF is built from
+    default: af6ed454f0ed39cad8a5e1bca544ced18350a403
+outputs:
+  hidraw:
+    description: Space-separated hidraw paths, one per device
+    value: ${{ steps.up.outputs.hidraw }}
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: sudo modprobe uhid
+    - uses: actions/cache@v4
+      id: app
+      with:
+        path: ${{ runner.temp }}/apps/solana-nanosp-${{ inputs.app-tag }}.elf
+        key: ledger-rig-solana-nanosp-${{ inputs.app-tag }}
+    - if: steps.app.outputs.cache-hit != 'true'
+      shell: bash
+      working-directory: ${{ runner.temp }}
+      env:
+        TAG: ${{ inputs.app-tag }}
+      run: bash "$GITHUB_ACTION_PATH/scripts/build-solana-app.sh" "$TAG"
+    - shell: bash
+      run: |
+        python3 -m venv "$RUNNER_TEMP/ledger-rig"
+        "$RUNNER_TEMP/ledger-rig/bin/pip" install "$GITHUB_ACTION_PATH"
+    - shell: bash
+      run: cp -r "$GITHUB_ACTION_PATH/post" "$GITHUB_WORKSPACE/.ledger-rig-post"
+    - uses: ./.ledger-rig-post
+      with:
+        run: '"$RUNNER_TEMP/ledger-rig/bin/python" -m ledger_rig down'
+    - id: up
+      shell: bash
+      env:
+        COUNT: ${{ inputs.count }}
+        TAG: ${{ inputs.app-tag }}
+      run: |
+        hidraw=$(sudo "$RUNNER_TEMP/ledger-rig/bin/python" -m ledger_rig up --count "$COUNT" --app "$RUNNER_TEMP/apps/solana-nanosp-$TAG.elf" | cut -d' ' -f1 | paste -sd' ')
+        sudo chmod a+rw $hidraw
+        echo "hidraw=$hidraw" >> "$GITHUB_OUTPUT"
