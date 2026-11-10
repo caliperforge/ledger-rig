@@ -12,3 +12,7 @@ test = ["pytest", "ruff", "hid"]
 
 [tool.ruff]
 target-version = "py311"
+
+[tool.pytest.ini_options]
+markers = ["uhid: needs root and /dev/uhid"]
+addopts = "-m 'not uhid'"
