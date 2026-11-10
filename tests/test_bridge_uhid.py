@@ -42,7 +42,9 @@ def test_apdu_round_trips_through_hidraw():
     bridge = threading.Thread(target=Bridge("127.0.0.1", server.port, "0001").run)
     bridge.start()
     _wait_for(_paths)
-    pages = [d["usage_page"] for d in hid.enumerate(VENDOR) if d["serial_number"] == "0001"]
+    pages = [
+        d["usage_page"] for d in hid.enumerate(VENDOR) if d["serial_number"] == "0001"
+    ]
     assert pages == [0xFF00]
     device = hid.Device(path=_paths()[0])
     device.write(encode(APDU)[0])

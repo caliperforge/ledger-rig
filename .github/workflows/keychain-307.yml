@@ -88,6 +88,7 @@ jobs:
           name: results
           path: results.md
       - run: |
+          cat results.md
           for scenario in A B C D; do
             grep -q "^| 4db0db2 | $scenario | pass |" results.md
           done
