@@ -10,7 +10,9 @@ tag=$1
 src=$(mktemp -d)
 trap 'rm -rf "$src"' EXIT
 
-git clone --depth 1 --branch "$tag" https://github.com/LedgerHQ/app-solana "$src"
+git -C "$src" init -q
+git -C "$src" fetch -q --depth 1 https://github.com/LedgerHQ/app-solana "$tag"
+git -C "$src" checkout -q FETCH_HEAD
 docker run --rm --user "$(id -u):$(id -g)" -v "$src:/app" -w /app \
   ghcr.io/ledgerhq/ledger-app-builder/ledger-app-builder sh -c 'make BOLOS_SDK=$NANOSP_SDK'
 mkdir -p apps

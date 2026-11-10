@@ -4,7 +4,7 @@ jobs:
   test:
     runs-on: ubuntu-latest
     env:
-      SOLANA_APP_TAG: v1.0.2
+      SOLANA_APP_TAG: af6ed454f0ed39cad8a5e1bca544ced18350a403
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -18,10 +18,10 @@ jobs:
       - if: steps.solana-app.outputs.cache-hit != 'true'
         run: bash scripts/build-solana-app.sh "$SOLANA_APP_TAG"
       - run: test "$(head -c 4 "apps/solana-nanosp-$SOLANA_APP_TAG.elf" | od -An -tx1 | tr -d ' \n')" = 7f454c46
-      - run: pip install -e ".[test]"
+      - run: pip install -e ".[test]" solders==0.27.0
       - run: ruff check .
       - run: ruff format --check .
       - run: pytest
       - run: sudo apt-get install -y -qq libhidapi-hidraw0
       - run: sudo modprobe uhid
-      - run: sudo "$(which python)" -m pytest -m uhid
+      - run: sudo SOLANA_APP_TAG="$SOLANA_APP_TAG" "$(which python)" -m pytest -m uhid
