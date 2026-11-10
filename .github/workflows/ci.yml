@@ -3,11 +3,21 @@ on: [push, pull_request]
 jobs:
   test:
     runs-on: ubuntu-latest
+    env:
+      SOLANA_APP_TAG: v1.0.2
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+      - uses: actions/cache@v4
+        id: solana-app
+        with:
+          path: apps/solana-nanosp-${{ env.SOLANA_APP_TAG }}.elf
+          key: solana-nanosp-${{ env.SOLANA_APP_TAG }}
+      - if: steps.solana-app.outputs.cache-hit != 'true'
+        run: bash scripts/build-solana-app.sh "$SOLANA_APP_TAG"
+      - run: test "$(head -c 4 "apps/solana-nanosp-$SOLANA_APP_TAG.elf" | od -An -tx1 | tr -d ' \n')" = 7f454c46
       - run: pip install -e ".[test]"
       - run: ruff check .
       - run: ruff format --check .
