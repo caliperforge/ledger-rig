@@ -1,3 +1,4 @@
+import logging
 import os
 import select
 import socket
@@ -5,6 +6,8 @@ import socket
 from ledger_rig import framing, uhid
 
 VENDOR = 0x2C97
+
+log = logging.getLogger(__name__)
 
 
 class Bridge:
@@ -43,9 +46,11 @@ def _serve(fd: int, sock: socket.socket) -> None:
         apdu = decoder.feed(report)
         if apdu is None:
             continue
+        log.info("-> %d", len(apdu))
         reply = _exchange(sock, apdu)
         if reply is None:
             return
+        log.info("<- %d %s", len(reply), reply[-2:].hex())
         for chunk in framing.encode(reply):
             os.write(fd, uhid.input2(chunk))
 

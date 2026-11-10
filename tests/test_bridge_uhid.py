@@ -1,4 +1,6 @@
 import socket
+import subprocess
+import sys
 import threading
 import time
 
@@ -6,6 +8,7 @@ import pytest
 from fake_apdu import FakeApdu
 
 from ledger_rig import uhid
+from ledger_rig.__main__ import main
 from ledger_rig.bridge import VENDOR, Bridge
 from ledger_rig.framing import REPORT_SIZE, Decoder, FramingError, encode
 
@@ -84,3 +87,43 @@ def test_refused_socket_raises_before_device():
     listener.close()
     with pytest.raises(ConnectionRefusedError):
         Bridge("127.0.0.1", port, "0001").run()
+
+
+@pytest.mark.uhid
+def test_command_line_logs_each_apdu_and_exits_on_close():
+    import hid
+
+    server = FakeApdu({APDU: REPLY})
+    process = subprocess.Popen(
+        [sys.executable, "-m", "ledger_rig", "bridge"]
+        + ["--apdu", f"127.0.0.1:{server.port}", "--serial", "0001"],
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    _wait_for(_paths)
+    device = hid.Device(path=_paths()[0])
+    device.write(encode(APDU)[0])
+    report = device.read(REPORT_SIZE, timeout=5000)
+    device.close()
+    assert Decoder().feed(report) == REPLY
+
+    server.close()
+    _, stderr = process.communicate(timeout=5)
+    assert process.returncode == 0
+    assert stderr.splitlines() == ["-> 5", "<- 5 9000"]
+    _wait_for(lambda: not _paths())
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["bridge", "--apdu", "127.0.0.1", "--serial", "0001"],
+        ["bridge", "--apdu", "127.0.0.1:port", "--serial", "0001"],
+        ["bridge", "--apdu", "127.0.0.1:9999"],
+        [],
+    ],
+)
+def test_command_line_refuses_bad_arguments(argv):
+    with pytest.raises(SystemExit) as refused:
+        main(argv)
+    assert refused.value.code == 2
