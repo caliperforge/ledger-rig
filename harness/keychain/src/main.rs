@@ -29,10 +29,10 @@ async fn main() {
                 keys: [k0.clone(), k1.clone()],
             };
             match scenario.as_str() {
-                "A" => outcome(scenario_a(&run)),
-                "B" => scenario_b(&run),
+                "A" => outcome(scenario_a(&run).await),
+                "B" => scenario_b(&run).await,
                 "C" => outcome(scenario_c(&run).await),
-                "D" => outcome(scenario_d(&run)),
+                "D" => outcome(scenario_d(&run).await),
                 _ => (false, Some(format!("unknown scenario {scenario}"))),
             }
         }
@@ -55,35 +55,44 @@ fn outcome(result: Result<(), String>) -> (bool, Option<String>) {
 }
 
 fn hold(run: &Run) -> Result<[LedgerSigner; 2], String> {
-    Ok([connect(Some(&run.hidraw[0]))?, connect(Some(&run.hidraw[1]))?])
+    Ok([
+        connect(Some(&run.hidraw[0]))?,
+        connect(Some(&run.hidraw[1]))?,
+    ])
 }
 
-fn scenario_a(run: &Run) -> Result<(), String> {
-    let _held = hold(run)?;
+async fn scenario_a(run: &Run) -> Result<(), String> {
+    let held = hold(run)?;
     for i in 1..=READS {
         let device = 1 - i % 2;
-        let key = read(&run.hidraw[device]).map_err(|e| format!("read {i}: {e}"))?;
+        let key = read(&held[device])
+            .await
+            .map_err(|e| format!("read {i}: {e}"))?;
         check(run, i, device, &key)?;
     }
     Ok(())
 }
 
-fn scenario_b(run: &Run) -> (bool, Option<String>) {
-    let _held = match hold(run) {
+async fn scenario_b(run: &Run) -> (bool, Option<String>) {
+    let [s0, mut s1] = match hold(run) {
         Ok(held) => held,
         Err(e) => return (false, Some(e)),
     };
-    let mut paths = run.hidraw.clone();
     let mut error = None;
     for i in 1..=READS {
         if i == RESTART_BEFORE {
-            match restart_0001() {
-                Ok(path) => paths[1] = path,
+            let path = match restart_0001() {
+                Ok(path) => path,
                 Err(e) => return (false, error.or(Some(e))),
-            }
+            };
+            drop(s1);
+            s1 = match connect(Some(&path)) {
+                Ok(signer) => signer,
+                Err(e) => return (false, error.or(Some(e))),
+            };
         }
         let device = 1 - i % 2;
-        match read(&paths[device]) {
+        match read([&s0, &s1][device]).await {
             Ok(key) => {
                 if let Err(e) = check(run, i, device, &key) {
                     return (false, error.or(Some(e)));
@@ -105,27 +114,27 @@ async fn scenario_c(run: &Run) -> Result<(), String> {
     if unnamed.pubkey().to_string() != run.keys[0] {
         return Err(format!("unnamed signer returned {}", unnamed.pubkey()));
     }
-    let _named = connect(Some(&path))?;
+    let named = connect(Some(&path))?;
     for i in 1..=READS {
         if i % 2 == 1 {
             if !unnamed.is_available().await {
                 return Err(format!("unnamed signer unavailable at read {i}"));
             }
         } else {
-            let key = read(&path).map_err(|e| format!("read {i}: {e}"))?;
+            let key = read(&named).await.map_err(|e| format!("read {i}: {e}"))?;
             check(run, i, 1, &key)?;
         }
     }
     Ok(())
 }
 
-fn scenario_d(run: &Run) -> Result<(), String> {
-    let _held = connect(Some(&run.hidraw[0]))?;
-    let key = read(&run.hidraw[0]).map_err(|e| format!("read 1: {e}"))?;
+async fn scenario_d(run: &Run) -> Result<(), String> {
+    let held = connect(Some(&run.hidraw[0]))?;
+    let key = read(&held).await.map_err(|e| format!("read 1: {e}"))?;
     check(run, 1, 0, &key)?;
     let path = hidraw_0001().ok_or("bridge 0001 not running")?;
     let _second = connect(Some(&path))?;
-    let key = read(&run.hidraw[0]).map_err(|e| format!("read 2: {e}"))?;
+    let key = read(&held).await.map_err(|e| format!("read 2: {e}"))?;
     check(run, 2, 0, &key)
 }
 
@@ -140,8 +149,11 @@ fn connect(path: Option<&str>) -> Result<LedgerSigner, String> {
     LedgerSigner::connect_with(config).map_err(|e| e.to_string())
 }
 
-fn read(path: &str) -> Result<String, String> {
-    connect(Some(path)).map(|signer| signer.pubkey().to_string())
+async fn read(signer: &LedgerSigner) -> Result<String, String> {
+    if !signer.is_available().await {
+        return Err("signer unavailable".to_string());
+    }
+    Ok(signer.pubkey().to_string())
 }
 
 fn check(run: &Run, i: usize, device: usize, key: &str) -> Result<(), String> {
