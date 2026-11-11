@@ -1,5 +1,11 @@
 name: keychain-307
-on: push
+on:
+  push:
+  workflow_dispatch:
+    inputs:
+      repeat:
+        type: number
+        default: 1
 jobs:
   run:
     runs-on: ubuntu-latest
@@ -7,7 +13,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        commit: [004999a, 0b7bf83, 4db0db2]
+        commit: [004999a, 0b7bf83, 4db0db2, 4db0db2+claim]
     env:
       COMMIT: ${{ matrix.commit }}
     steps:
@@ -17,7 +23,9 @@ jobs:
           repository: caliperforge/solana-keychain
           path: keychain
           fetch-depth: 0
-      - run: git -C keychain checkout --detach "$COMMIT"
+      - run: git -C keychain checkout --detach "${COMMIT%+claim}"
+      - if: endsWith(matrix.commit, '+claim')
+        run: git -C keychain apply ../harness/keychain/patches/release-claim-before-reply.patch
       - run: sudo apt-get install -y -qq libudev-dev pkg-config strace
       - uses: dtolnay/rust-toolchain@stable
       - run: cp keychain/rust/Cargo.lock harness/keychain/
@@ -42,8 +50,8 @@ jobs:
           print("keys=" + " ".join(keys))
           EOF
       - env:
-          HIDRAW: ${{ steps.rig.outputs.hidraw }}
           KEYS: ${{ steps.keys.outputs.keys }}
+          REPEAT: ${{ inputs.repeat || 1 }}
         run: |
           bridge_logs="/tmp/ledger-rig/bridge-0000.log /tmp/ledger-rig/bridge-0001.log"
           sizes=$(stat -c %s $bridge_logs)
@@ -56,24 +64,32 @@ jobs:
           done
           mkdir logs
           declare -A size
-          for scenario in A B C D; do
+          for pass in $(seq "$REPEAT"); do
+            hidraw=()
             for serial in 0000 0001; do
-              size[$serial]=$(stat -c %s "/tmp/ledger-rig/bridge-$serial.log" 2>/dev/null || echo 0)
+              node=$(grep -lx "HID_UNIQ=$serial" /sys/class/hidraw/*/device/uevent)
+              node=${node%/device/uevent}
+              hidraw+=("/dev/${node##*/}")
             done
-            status=0
-            sudo strace -f -qq -e trace=openat -o "trace-$scenario" \
-              harness/keychain/target/release/keychain-harness "$scenario" "$COMMIT" $HIDRAW $KEYS \
-              > "line-$scenario" || status=$?
-            for serial in 0000 0001; do
-              tail -c +$((size[$serial] + 1)) "/tmp/ledger-rig/bridge-$serial.log" \
-                > "logs/bridge-$serial-$COMMIT-$scenario.log"
+            for scenario in A B C D; do
+              for serial in 0000 0001; do
+                size[$serial]=$(stat -c %s "/tmp/ledger-rig/bridge-$serial.log" 2>/dev/null || echo 0)
+              done
+              status=0
+              sudo strace -f -qq -e trace=openat -o "trace-$scenario" \
+                harness/keychain/target/release/keychain-harness "$scenario" "$COMMIT" "${hidraw[@]}" $KEYS \
+                > "line-$scenario" || status=$?
+              for serial in 0000 0001; do
+                tail -c +$((size[$serial] + 1)) "/tmp/ledger-rig/bridge-$serial.log" \
+                  > "logs/bridge-$serial-$COMMIT-$scenario-$pass.log"
+              done
+              if [ ! -s "line-$scenario" ]; then
+                jq -nc --arg commit "$COMMIT" --arg scenario "$scenario" --arg error "no result (exit $status)" \
+                  '{$commit, $scenario, pass: false, $error, detail: $error}' > "line-$scenario"
+              fi
+              opens=$(grep -c '"/dev/hidraw' "trace-$scenario" || true)
+              jq -c --argjson opens "$opens" '. + {hid_opens: $opens}' "line-$scenario" >> "results-$COMMIT.jsonl"
             done
-            if [ ! -s "line-$scenario" ]; then
-              jq -nc --arg commit "$COMMIT" --arg scenario "$scenario" --arg error "no result (exit $status)" \
-                '{$commit, $scenario, pass: false, $error, detail: $error}' > "line-$scenario"
-            fi
-            opens=$(grep -c '"/dev/hidraw' "trace-$scenario" || true)
-            jq -c --argjson opens "$opens" '. + {hid_opens: $opens}' "line-$scenario" >> "results-$COMMIT.jsonl"
           done
       - uses: actions/upload-artifact@v4
         with:
@@ -105,6 +121,15 @@ jobs:
                 else "| \($c) | \($s) | \(if $r.pass then "pass" else "fail" end) | \($r.error // "" | cell) | \(($r.detail // "")[:200] | cell) | \($r.wall_ms // "") | \($r.hid_opens // "") |"
                 end)
           ' /dev/null results/*.jsonl > results.md
+          echo >> results.md
+          jq -rs '
+            def busy: .detail // "" | contains("Ledger is busy");
+            "| commit | runs | busy A | busy B | busy C | busy D | other failures |",
+            "|---|---|---|---|---|---|---|",
+            (. as $rows | ("4db0db2", "4db0db2+claim") as $c
+              | ($rows | map(select(.commit == $c and (.pass | not)))) as $f
+              | "| \($c) | \($rows | map(select(.commit == $c and .scenario == "A")) | length) | \([("A", "B", "C", "D") as $s | $f | map(select(.scenario == $s and busy)) | length] | join(" | ")) | \($f | map(select(busy | not)) | length) |")
+          ' /dev/null results/*.jsonl >> results.md
       - uses: actions/upload-artifact@v4
         with:
           name: results
@@ -112,6 +137,8 @@ jobs:
       - run: |
           cat results.md
           jq -se 'all(.[]; .pass or ((.detail // "") != ""))' results/*.jsonl
+      - if: github.event_name == 'push'
+        run: |
           for scenario in A B C D; do
             grep -q "^| 4db0db2 | $scenario | pass |" results.md
           done

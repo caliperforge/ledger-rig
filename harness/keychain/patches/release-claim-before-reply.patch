@@ -1,0 +1,35 @@
+diff --git a/rust/src/ledger/mod.rs b/rust/src/ledger/mod.rs
+--- a/rust/src/ledger/mod.rs
++++ b/rust/src/ledger/mod.rs
+@@ -1189,6 +1189,7 @@
+                 let result = parse(&path_str).and_then(|path| {
+                     sessions.connect(&binding, &path, confirm_pubkey_on_device, auto_open_app)
+                 });
++                drop(_claim);
+                 let _ = reply.send(result);
+             }
+ 
+@@ -1204,6 +1205,7 @@
+                         hardware.sign_transaction(wallet, &path, &message)
+                     })
+                 });
++                drop(_claim);
+                 let _ = reply.send(result);
+             }
+ 
+@@ -1219,6 +1221,7 @@
+                         hardware.sign_offchain(wallet, &path, &message)
+                     })
+                 });
++                drop(_claim);
+                 let _ = reply.send(result);
+             }
+ 
+@@ -1235,6 +1238,7 @@
+                         })
+                     })
+                     .is_ok();
++                drop(_claim);
+                 let _ = reply.send(ok);
+             }
+ 
