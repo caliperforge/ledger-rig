@@ -1,5 +1,6 @@
 import hashlib
 import os
+import re
 import subprocess
 import sys
 import time
@@ -13,6 +14,7 @@ from ledger_rig.framing import REPORT_SIZE, Decoder, encode
 from ledger_rig.seeds import SEEDS
 
 GET_PUBKEY = bytes.fromhex("e0050000 09 02 8000002c 800001f5")
+ISO = r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}"
 
 
 def _wait_for(predicate) -> None:
@@ -67,6 +69,11 @@ def test_up_serves_one_solana_key_per_seed_and_down_removes_them():
         _wait_for(lambda: not _rig_serials())
     assert replies[0] != replies[1]
     assert replies == [_solana_key(m) + b"\x90\x00" for m in SEEDS]
+    for (_, serial, _), reply in zip(devices, replies, strict=True):
+        log = (rig.LOGS / f"bridge-{serial}.log").read_text().splitlines()
+        sent = rf"{ISO} -> {len(GET_PUBKEY)} {GET_PUBKEY[:16].hex()}"
+        assert re.fullmatch(sent, log[-2])
+        assert re.fullmatch(rf"{ISO} <- 34 9000 {reply[:16].hex()}", log[-1])
 
 
 @pytest.mark.parametrize(

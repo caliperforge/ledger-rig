@@ -1,10 +1,11 @@
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::{Duration, Instant};
 use std::{env, fs, thread};
 
 use serde_json::json;
 use solana_keychain::traits::SolanaSigner;
-use solana_keychain::{LedgerConfig, LedgerSigner};
+use solana_keychain::{LedgerConfig, LedgerSigner, SignerError};
 
 const USAGE: &str =
     "usage: keychain-harness <A|B|C|D> <commit> <hidraw0000> <hidraw0001> <key0000> <key0001>";
@@ -12,17 +13,52 @@ const READS: usize = 50;
 const RESTART_BEFORE: usize = 26;
 const TIMEOUT: Duration = Duration::from_secs(60);
 const BRIDGE_0001: [&str; 4] = ["ledger_rig", "bridge", "--serial", "0001"];
+const NO_ERROR_VALUE: &str = "is_available() returned false; no error value";
 
 struct Run {
     hidraw: [String; 2],
     keys: [String; 2],
 }
 
+struct Failure {
+    error: String,
+    detail: String,
+}
+
+impl Failure {
+    fn unavailable(error: String) -> Self {
+        Failure {
+            error,
+            detail: NO_ERROR_VALUE.to_string(),
+        }
+    }
+
+    fn at(mut self, i: usize) -> Self {
+        self.error = format!("read {i}: {}", self.error);
+        self
+    }
+}
+
+impl From<String> for Failure {
+    fn from(error: String) -> Self {
+        Failure {
+            detail: error.clone(),
+            error,
+        }
+    }
+}
+
+impl From<&str> for Failure {
+    fn from(error: &str) -> Self {
+        error.to_string().into()
+    }
+}
+
 #[tokio::main(flavor = "current_thread")]
 async fn main() {
     let args: Vec<String> = env::args().skip(1).collect();
     let start = Instant::now();
-    let (pass, error) = match args.as_slice() {
+    let (pass, failure) = match args.as_slice() {
         [scenario, _, h0, h1, k0, k1] => {
             let run = Run {
                 hidraw: [h0.clone(), h1.clone()],
@@ -33,10 +69,10 @@ async fn main() {
                 "B" => scenario_b(&run).await,
                 "C" => outcome(scenario_c(&run).await),
                 "D" => outcome(scenario_d(&run).await),
-                _ => (false, Some(format!("unknown scenario {scenario}"))),
+                _ => (false, Some(format!("unknown scenario {scenario}").into())),
             }
         }
-        _ => (false, Some(USAGE.to_string())),
+        _ => (false, Some(USAGE.into())),
     };
     println!(
         "{}",
@@ -44,36 +80,35 @@ async fn main() {
             "commit": args.get(1),
             "scenario": args.first(),
             "pass": pass,
-            "error": error,
+            "error": failure.as_ref().map(|f| &f.error),
+            "detail": failure.as_ref().map(|f| &f.detail),
             "wall_ms": start.elapsed().as_millis() as u64,
         })
     );
 }
 
-fn outcome(result: Result<(), String>) -> (bool, Option<String>) {
+fn outcome(result: Result<(), Failure>) -> (bool, Option<Failure>) {
     (result.is_ok(), result.err())
 }
 
-fn hold(run: &Run) -> Result<[LedgerSigner; 2], String> {
+fn hold(run: &Run) -> Result<[LedgerSigner; 2], Failure> {
     Ok([
         connect(Some(&run.hidraw[0]))?,
         connect(Some(&run.hidraw[1]))?,
     ])
 }
 
-async fn scenario_a(run: &Run) -> Result<(), String> {
+async fn scenario_a(run: &Run) -> Result<(), Failure> {
     let held = hold(run)?;
     for i in 1..=READS {
         let device = 1 - i % 2;
-        let key = read(&held[device])
-            .await
-            .map_err(|e| format!("read {i}: {e}"))?;
+        let key = read(&held[device]).await.map_err(|e| e.at(i))?;
         check(run, i, device, &key)?;
     }
     Ok(())
 }
 
-async fn scenario_b(run: &Run) -> (bool, Option<String>) {
+async fn scenario_b(run: &Run) -> (bool, Option<Failure>) {
     let [s0, mut s1] = match hold(run) {
         Ok(held) => held,
         Err(e) => return (false, Some(e)),
@@ -83,7 +118,7 @@ async fn scenario_b(run: &Run) -> (bool, Option<String>) {
         if i == RESTART_BEFORE {
             let path = match restart_0001() {
                 Ok(path) => path,
-                Err(e) => return (false, error.or(Some(e))),
+                Err(e) => return (false, error.or(Some(e.into()))),
             };
             drop(s1);
             s1 = match connect(Some(&path)) {
@@ -95,50 +130,52 @@ async fn scenario_b(run: &Run) -> (bool, Option<String>) {
         match read([&s0, &s1][device]).await {
             Ok(key) => {
                 if let Err(e) = check(run, i, device, &key) {
-                    return (false, error.or(Some(e)));
+                    return (false, error.or(Some(e.into())));
                 }
             }
             Err(e) => {
-                error.get_or_insert(format!("read {i}: {e}"));
+                error.get_or_insert(e.at(i));
             }
         }
     }
     (true, error)
 }
 
-async fn scenario_c(run: &Run) -> Result<(), String> {
-    let argv = kill_0001()?;
+async fn scenario_c(run: &Run) -> Result<(), Failure> {
+    let (argv, log) = kill_0001()?;
     let unnamed = connect(None);
-    let path = respawn_0001(&argv)?;
+    let path = respawn_0001(&argv, &log)?;
     let unnamed = unnamed?;
     if unnamed.pubkey().to_string() != run.keys[0] {
-        return Err(format!("unnamed signer returned {}", unnamed.pubkey()));
+        return Err(format!("unnamed signer returned {}", unnamed.pubkey()).into());
     }
     let named = connect(Some(&path))?;
     for i in 1..=READS {
         if i % 2 == 1 {
             if !unnamed.is_available().await {
-                return Err(format!("unnamed signer unavailable at read {i}"));
+                return Err(Failure::unavailable(format!(
+                    "unnamed signer unavailable at read {i}"
+                )));
             }
         } else {
-            let key = read(&named).await.map_err(|e| format!("read {i}: {e}"))?;
+            let key = read(&named).await.map_err(|e| e.at(i))?;
             check(run, i, 1, &key)?;
         }
     }
     Ok(())
 }
 
-async fn scenario_d(run: &Run) -> Result<(), String> {
+async fn scenario_d(run: &Run) -> Result<(), Failure> {
     let held = connect(Some(&run.hidraw[0]))?;
-    let key = read(&held).await.map_err(|e| format!("read 1: {e}"))?;
+    let key = read(&held).await.map_err(|e| e.at(1))?;
     check(run, 1, 0, &key)?;
     let path = hidraw_0001().ok_or("bridge 0001 not running")?;
     let _second = connect(Some(&path))?;
-    let key = read(&held).await.map_err(|e| format!("read 2: {e}"))?;
-    check(run, 2, 0, &key)
+    let key = read(&held).await.map_err(|e| e.at(2))?;
+    Ok(check(run, 2, 0, &key)?)
 }
 
-fn connect(path: Option<&str>) -> Result<LedgerSigner, String> {
+fn connect(path: Option<&str>) -> Result<LedgerSigner, Failure> {
     let mut config = LedgerConfig {
         auto_open_app: false,
         ..LedgerConfig::default()
@@ -146,12 +183,27 @@ fn connect(path: Option<&str>) -> Result<LedgerSigner, String> {
     if let Some(path) = path {
         config.host_device_path = Some(path.into());
     }
-    LedgerSigner::connect_with(config).map_err(|e| e.to_string())
+    LedgerSigner::connect_with(config).map_err(|e| {
+        let inner = match &e {
+            SignerError::NotAvailable(s)
+            | SignerError::UserRejected(s)
+            | SignerError::ConfigError(s)
+            | SignerError::IoError(s)
+            | SignerError::Other(s)
+            | SignerError::SigningFailed(s)
+            | SignerError::InvalidPublicKey(s) => s.clone(),
+            _ => e.to_string(),
+        };
+        Failure {
+            error: e.to_string(),
+            detail: format!("{e:?}: {inner}"),
+        }
+    })
 }
 
-async fn read(signer: &LedgerSigner) -> Result<String, String> {
+async fn read(signer: &LedgerSigner) -> Result<String, Failure> {
     if !signer.is_available().await {
-        return Err("signer unavailable".to_string());
+        return Err(Failure::unavailable("signer unavailable".to_string()));
     }
     Ok(signer.pubkey().to_string())
 }
@@ -164,24 +216,28 @@ fn check(run: &Run, i: usize, device: usize, key: &str) -> Result<(), String> {
 }
 
 fn restart_0001() -> Result<String, String> {
-    let argv = kill_0001()?;
-    respawn_0001(&argv)
+    let (argv, log) = kill_0001()?;
+    respawn_0001(&argv, &log)
 }
 
-fn kill_0001() -> Result<Vec<String>, String> {
+fn kill_0001() -> Result<(Vec<String>, PathBuf), String> {
     let (pid, argv) = bridge_0001().ok_or("bridge 0001 not running")?;
+    let log = fs::read_link(format!("/proc/{pid}/fd/2"))
+        .map_err(|e| format!("read_link /proc/{pid}/fd/2: {e}"))?;
     let killed = Command::new("kill").args(["-9", pid.as_str()]).status();
     if !killed.is_ok_and(|s| s.success()) {
         return Err(format!("kill -9 {pid} failed"));
     }
     wait_for(|| hidraw_0001().is_none().then_some(()))?;
-    Ok(argv)
+    Ok((argv, log))
 }
 
 // A child of PID 1, so `strace -f` on the harness still exits.
-fn respawn_0001(argv: &[String]) -> Result<String, String> {
+fn respawn_0001(argv: &[String], log: &Path) -> Result<String, String> {
     let spawned = Command::new("systemd-run")
-        .args(["--quiet", "--collect", "--"])
+        .args(["--quiet", "--collect"])
+        .arg(format!("--property=StandardError=append:{}", log.display()))
+        .arg("--")
         .args(argv)
         .status();
     if !spawned.is_ok_and(|s| s.success()) {

@@ -45,14 +45,23 @@ jobs:
           HIDRAW: ${{ steps.rig.outputs.hidraw }}
           KEYS: ${{ steps.keys.outputs.keys }}
         run: |
+          mkdir logs
+          declare -A size
           for scenario in A B C D; do
+            for serial in 0000 0001; do
+              size[$serial]=$(stat -c %s "/tmp/ledger-rig/bridge-$serial.log" 2>/dev/null || echo 0)
+            done
             status=0
             sudo strace -f -qq -e trace=openat -o "trace-$scenario" \
               harness/keychain/target/release/keychain-harness "$scenario" "$COMMIT" $HIDRAW $KEYS \
               > "line-$scenario" || status=$?
+            for serial in 0000 0001; do
+              tail -c +$((size[$serial] + 1)) "/tmp/ledger-rig/bridge-$serial.log" \
+                > "logs/bridge-$serial-$COMMIT-$scenario.log"
+            done
             if [ ! -s "line-$scenario" ]; then
               jq -nc --arg commit "$COMMIT" --arg scenario "$scenario" --arg error "no result (exit $status)" \
-                '{$commit, $scenario, pass: false, $error}' > "line-$scenario"
+                '{$commit, $scenario, pass: false, $error, detail: $error}' > "line-$scenario"
             fi
             opens=$(grep -c '"/dev/hidraw' "trace-$scenario" || true)
             jq -c --argjson opens "$opens" '. + {hid_opens: $opens}' "line-$scenario" >> "results-$COMMIT.jsonl"
@@ -61,6 +70,10 @@ jobs:
         with:
           name: results-${{ matrix.commit }}
           path: results-${{ matrix.commit }}.jsonl
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bridge-logs-${{ matrix.commit }}
+          path: logs
   table:
     needs: run
     if: always()
@@ -75,12 +88,12 @@ jobs:
           shopt -s nullglob
           jq -rs '
             def cell: tostring | gsub("\\|"; "\\|") | gsub("\n"; " ");
-            "| commit | scenario | result | error | wall ms | HID opens |",
-            "|---|---|---|---|---|---|",
+            "| commit | scenario | result | error | detail | wall ms | HID opens |",
+            "|---|---|---|---|---|---|---|",
             (. as $rows | ("004999a", "0b7bf83", "4db0db2") as $c | ("A", "B", "C", "D") as $s
               | ($rows | map(select(.commit == $c and .scenario == $s)) | first) as $r
-              | if $r == null then "| \($c) | \($s) | missing | | | |"
-                else "| \($c) | \($s) | \(if $r.pass then "pass" else "fail" end) | \($r.error // "" | cell) | \($r.wall_ms // "") | \($r.hid_opens // "") |"
+              | if $r == null then "| \($c) | \($s) | missing | | | | |"
+                else "| \($c) | \($s) | \(if $r.pass then "pass" else "fail" end) | \($r.error // "" | cell) | \(($r.detail // "")[:200] | cell) | \($r.wall_ms // "") | \($r.hid_opens // "") |"
                 end)
           ' /dev/null results/*.jsonl > results.md
       - uses: actions/upload-artifact@v4
@@ -89,6 +102,7 @@ jobs:
           path: results.md
       - run: |
           cat results.md
+          jq -se 'all(.[]; .pass or ((.detail // "") != ""))' results/*.jsonl
           for scenario in A B C D; do
             grep -q "^| 4db0db2 | $scenario | pass |" results.md
           done

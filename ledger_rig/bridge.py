@@ -2,6 +2,7 @@ import logging
 import os
 import select
 import socket
+from datetime import datetime
 
 from ledger_rig import framing, uhid
 
@@ -46,13 +47,19 @@ def _serve(fd: int, sock: socket.socket) -> None:
         apdu = decoder.feed(report)
         if apdu is None:
             continue
-        log.info("-> %d", len(apdu))
+        log.info("%s -> %d %s", _now(), len(apdu), apdu[:16].hex())
         reply = _exchange(sock, apdu)
         if reply is None:
             return
-        log.info("<- %d %s", len(reply), reply[-2:].hex())
+        log.info(
+            "%s <- %d %s %s", _now(), len(reply), reply[-2:].hex(), reply[:16].hex()
+        )
         for chunk in framing.encode(reply):
             os.write(fd, uhid.input2(chunk))
+
+
+def _now() -> str:
+    return datetime.now().isoformat(timespec="milliseconds")
 
 
 def _exchange(sock: socket.socket, apdu: bytes) -> bytes | None:

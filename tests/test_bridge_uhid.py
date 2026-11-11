@@ -1,3 +1,4 @@
+import re
 import socket
 import subprocess
 import sys
@@ -14,6 +15,7 @@ from ledger_rig.framing import REPORT_SIZE, Decoder, FramingError, encode
 
 APDU = bytes.fromhex("e001000000")
 REPLY = bytes.fromhex("0102039000")
+ISO = r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}"
 
 
 def _wait_for(predicate) -> None:
@@ -97,7 +99,9 @@ def test_refused_socket_raises_before_device():
 def test_command_line_logs_each_apdu_and_exits_on_close():
     import hid
 
-    server = FakeApdu({APDU: REPLY})
+    apdu = bytes(range(20))
+    reply = bytes(range(100, 118)) + b"\x90\x00"
+    server = FakeApdu({apdu: reply})
     process = subprocess.Popen(
         [sys.executable, "-m", "ledger_rig", "bridge"]
         + ["--apdu", f"127.0.0.1:{server.port}", "--serial", "0001"],
@@ -106,15 +110,17 @@ def test_command_line_logs_each_apdu_and_exits_on_close():
     )
     _wait_for(_paths)
     device = hid.Device(path=_paths()[0])
-    device.write(encode(APDU)[0])
+    device.write(encode(apdu)[0])
     report = device.read(REPORT_SIZE, timeout=5000)
     device.close()
-    assert Decoder().feed(report) == REPLY
+    assert Decoder().feed(report) == reply
 
     server.close()
     _, stderr = process.communicate(timeout=5)
     assert process.returncode == 0
-    assert stderr.splitlines() == ["-> 5", "<- 5 9000"]
+    sent, received = stderr.splitlines()
+    assert re.fullmatch(rf"{ISO} -> 20 {apdu[:16].hex()}", sent)
+    assert re.fullmatch(rf"{ISO} <- 20 9000 {reply[:16].hex()}", received)
     _wait_for(lambda: not _paths())
 
 

@@ -12,12 +12,14 @@ from typing import TypeVar
 IMAGE = "ghcr.io/ledgerhq/speculos"
 LABEL = "ledger-rig"
 TIMEOUT = 60
+LOGS = Path("/tmp/ledger-rig")
 
 T = TypeVar("T")
 
 
 def up(app: str, seeds: Sequence[str]) -> list[tuple[str, str, int]]:
     elf = Path(app).resolve()
+    LOGS.mkdir(exist_ok=True)
     devices = []
     for i, seed in enumerate(seeds):
         apdu, api = _free_ports()
@@ -31,14 +33,15 @@ def up(app: str, seeds: Sequence[str]) -> list[tuple[str, str, int]]:
         )
         _poll(partial(_answers, api))
         serial = f"{i:04d}"
-        bridge = subprocess.Popen(
-            [sys.executable, "-m", "ledger_rig", "bridge"]
-            + ["--apdu", f"127.0.0.1:{apdu}", "--serial", serial],
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            start_new_session=True,
-        )
+        with (LOGS / f"bridge-{serial}.log").open("ab") as stderr:
+            bridge = subprocess.Popen(
+                [sys.executable, "-m", "ledger_rig", "bridge"]
+                + ["--apdu", f"127.0.0.1:{apdu}", "--serial", serial],
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=stderr,
+                start_new_session=True,
+            )
         devices.append((_poll(partial(_hidraw, serial, bridge)), serial, apdu))
     return devices
 

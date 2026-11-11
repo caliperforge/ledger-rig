@@ -22,7 +22,7 @@ sudo python -m ledger_rig up --count 2 --app apps/solana-nanosp-<tag>.elf
 sudo python -m ledger_rig down
 ```
 
-`up` starts one Speculos container and one bridge per device and prints `<hidraw> <serial> <apdu port>` for each. `down` removes the containers; their bridges exit with them.
+`up` starts one Speculos container and one bridge per device and prints `<hidraw> <serial> <apdu port>` for each. Each bridge appends its log to `/tmp/ledger-rig/bridge-<serial>.log`. `down` removes the containers; their bridges exit with them.
 
 ```sh
 sudo python -m ledger_rig bridge --apdu 127.0.0.1:9999 --serial 0001
@@ -33,8 +33,8 @@ sudo python -m ledger_rig bridge --apdu 127.0.0.1:9999 --serial 0001
 The bridge logs one line per APDU, command then response with its status word:
 
 ```
--> 5
-<- 5 9000
+2026-11-10T12:00:00.000 -> 5 e001000000
+2026-11-10T12:00:00.004 <- 5 9000 0102039000
 ```
 
 It exits once the APDU socket closes.
