@@ -137,8 +137,8 @@ jobs:
       - run: |
           cat results.md
           jq -se 'all(.[]; .pass or ((.detail // "") != ""))' results/*.jsonl
-      - if: github.event_name == 'push'
-        run: |
-          for scenario in A B C D; do
-            grep -q "^| 4db0db2 | $scenario | pass |" results.md
-          done
+          if [ "$GITHUB_EVENT_NAME" = push ]; then
+            for scenario in A B C D; do
+              grep -q "^| 4db0db2 | $scenario | pass |" results.md
+            done
+          fi
