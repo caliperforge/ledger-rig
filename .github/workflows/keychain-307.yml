@@ -45,6 +45,15 @@ jobs:
           HIDRAW: ${{ steps.rig.outputs.hidraw }}
           KEYS: ${{ steps.keys.outputs.keys }}
         run: |
+          bridge_logs="/tmp/ledger-rig/bridge-0000.log /tmp/ledger-rig/bridge-0001.log"
+          sizes=$(stat -c %s $bridge_logs)
+          last=
+          until [ "$sizes" = "$last" ]; do
+            [ "$SECONDS" -lt 60 ] || { echo "bridge logs still growing after 60 s" >&2; exit 1; }
+            last=$sizes
+            sleep 2
+            sizes=$(stat -c %s $bridge_logs)
+          done
           mkdir logs
           declare -A size
           for scenario in A B C D; do
