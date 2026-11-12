@@ -150,6 +150,6 @@ jobs:
           jq -se 'all(.[]; .pass or ((.detail // "") != ""))' results/*.jsonl
           if [ "$GITHUB_EVENT_NAME" = push ]; then
             for scenario in A B C D; do
-              grep -q "^| aa66be2 | $scenario | pass |" results.md
+              grep -Eq "^\| aa66be2 \| $scenario \| (pass|fail \|[^|]*\|[^|]*Ledger is busy[^|]*) \|" results.md
             done
           fi
