@@ -80,6 +80,17 @@ Every `<-` line on both bridges (`0000` lines 2, 4, 6, 8, 10, 12, 14; `0001` lin
 
 The logs show no cause for the unnamed signer being unavailable.
 
+## Busy failures
+
+Run https://github.com/caliperforge/ledger-rig/actions/runs/43130238317 (workflow_dispatch, `repeat: 20`, commit `620718f`):
+
+| commit | runs | busy A | busy B | busy C | busy D | other failures | job |
+|---|---|---|---|---|---|---|---|
+| 4db0db2 | 20 | 6 | 3 | 0 | 0 | 0 | https://github.com/caliperforge/ledger-rig/actions/runs/43130238317/job/130892297672 |
+| 4db0db2+claim | 20 | 0 | 0 | 0 | 0 | 0 | https://github.com/caliperforge/ledger-rig/actions/runs/43130238317/job/130892297595 |
+
+Verdict: race confirmed.
+
 ## Limit
 
 emulated Speculos devices on Linux hidraw, not physical Ledgers, and not macOS
