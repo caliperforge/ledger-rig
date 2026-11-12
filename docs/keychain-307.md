@@ -82,7 +82,7 @@ The logs show no cause for the unnamed signer being unavailable.
 
 ## Busy failures
 
-Run https://github.com/caliperforge/ledger-rig/actions/runs/43130238317 (workflow_dispatch, `repeat: 20`, commit `620718f`):
+Run https://github.com/caliperforge/ledger-rig/actions/runs/43130238317 (workflow_dispatch, `repeat: 20`, commit `620718f1ecaf41a679e03e205a95c142ab137746`):
 
 | commit | runs | busy A | busy B | busy C | busy D | other failures | job |
 |---|---|---|---|---|---|---|---|
