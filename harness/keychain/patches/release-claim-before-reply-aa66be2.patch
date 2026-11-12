@@ -1,0 +1,35 @@
+diff --git a/rust/src/ledger/mod.rs b/rust/src/ledger/mod.rs
+--- a/rust/src/ledger/mod.rs
++++ b/rust/src/ledger/mod.rs
+@@ -1304,6 +1304,7 @@ fn device_thread<H: Hardware>(hardware: H, cmd_rx: Receiver<DeviceCommand>) {
+                 let result = parse(&path_str).and_then(|path| {
+                     sessions.connect(&binding, &path, confirm_pubkey_on_device, auto_open_app)
+                 });
++                drop(_claim);
+                 let _ = reply.send(result);
+             }
+
+@@ -1320,6 +1321,7 @@ fn device_thread<H: Hardware>(hardware: H, cmd_rx: Receiver<DeviceCommand>) {
+                         hardware.sign_transaction(wallet, &path, &message)
+                     })
+                 });
++                drop(_claim);
+                 let _ = reply.send(result);
+             }
+
+@@ -1336,6 +1338,7 @@ fn device_thread<H: Hardware>(hardware: H, cmd_rx: Receiver<DeviceCommand>) {
+                         hardware.sign_offchain(wallet, &path, &message)
+                     })
+                 });
++                drop(_claim);
+                 let _ = reply.send(result);
+             }
+
+@@ -1351,6 +1354,7 @@ fn device_thread<H: Hardware>(hardware: H, cmd_rx: Receiver<DeviceCommand>) {
+                         checked.map_or_else(|| hardware.pubkey(wallet, &path, false), Ok)
+                     })
+                 });
++                drop(_claim);
+                 let _ = reply.send(result);
+             }
+

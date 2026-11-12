@@ -28,8 +28,7 @@ jobs:
           git -C keychain checkout --detach "${COMMIT%+claim}"
       - if: endsWith(matrix.commit, '+claim')
         run: |
-          git -C keychain apply ../harness/keychain/patches/release-claim-before-reply.patch ||
-            sed -i 's/^\( *\)let _ = reply\.send(/\1drop(_claim);\n&/' keychain/rust/src/ledger/mod.rs
+          git -C keychain apply ../harness/keychain/patches/release-claim-before-reply-${COMMIT%+claim}.patch
           git -C keychain diff --quiet && { echo "no reply.send line changed" >&2; exit 1; }
           git -C keychain diff > "release-claim-${COMMIT%+claim}.patch"
           echo "BASE=${COMMIT%+claim}" >> "$GITHUB_ENV"

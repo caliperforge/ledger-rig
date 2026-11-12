@@ -1,0 +1,35 @@
+diff --git a/rust/src/ledger/mod.rs b/rust/src/ledger/mod.rs
+--- a/rust/src/ledger/mod.rs
++++ b/rust/src/ledger/mod.rs
+@@ -1148,6 +1148,7 @@ fn device_thread(cmd_rx: Receiver<DeviceCommand>) {
+                     });
+                     Ok(pubkey_bytes)
+                 });
++                drop(_claim);
+                 let _ = reply.send(result);
+             }
+
+@@ -1169,6 +1170,7 @@ fn device_thread(cmd_rx: Receiver<DeviceCommand>) {
+                             .and_then(signature_bytes)
+                     },
+                 );
++                drop(_claim);
+                 let _ = reply.send(result);
+             }
+
+@@ -1190,6 +1192,7 @@ fn device_thread(cmd_rx: Receiver<DeviceCommand>) {
+                             .and_then(signature_bytes)
+                     },
+                 );
++                drop(_claim);
+                 let _ = reply.send(result);
+             }
+
+@@ -1206,6 +1209,7 @@ fn device_thread(cmd_rx: Receiver<DeviceCommand>) {
+                     |wallet, path| wallet.get_pubkey(path, false).map_err(map_rw_err),
+                 )
+                 .is_ok();
++                drop(_claim);
+                 let _ = reply.send(ok);
+             }
+
