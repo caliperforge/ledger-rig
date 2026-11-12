@@ -13,7 +13,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        commit: [004999a, 0b7bf83, 4db0db2, 4db0db2+claim]
+        commit: [cd5982c, cd5982c+claim, aa66be2, aa66be2+claim]
     env:
       COMMIT: ${{ matrix.commit }}
     steps:
@@ -23,9 +23,21 @@ jobs:
           repository: caliperforge/solana-keychain
           path: keychain
           fetch-depth: 0
-      - run: git -C keychain checkout --detach "${COMMIT%+claim}"
+      - run: |
+          git -C keychain fetch https://github.com/solana-foundation/solana-keychain cd5982c283e30328f1a0f13e754748633eb6bd06
+          git -C keychain checkout --detach "${COMMIT%+claim}"
       - if: endsWith(matrix.commit, '+claim')
-        run: git -C keychain apply ../harness/keychain/patches/release-claim-before-reply.patch
+        run: |
+          git -C keychain apply ../harness/keychain/patches/release-claim-before-reply.patch ||
+            sed -i 's/^\( *\)let _ = reply\.send(/\1drop(_claim);\n&/' keychain/rust/src/ledger/mod.rs
+          git -C keychain diff --quiet && { echo "no reply.send line changed" >&2; exit 1; }
+          git -C keychain diff > "release-claim-${COMMIT%+claim}.patch"
+          echo "BASE=${COMMIT%+claim}" >> "$GITHUB_ENV"
+      - if: endsWith(matrix.commit, '+claim')
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-claim-${{ env.BASE }}.patch
+          path: release-claim-${{ env.BASE }}.patch
       - run: sudo apt-get install -y -qq libudev-dev pkg-config strace
       - uses: dtolnay/rust-toolchain@stable
       - run: cp keychain/rust/Cargo.lock harness/keychain/
@@ -115,7 +127,7 @@ jobs:
             def cell: tostring | gsub("\\|"; "\\|") | gsub("\n"; " ");
             "| commit | scenario | result | error | detail | wall ms | HID opens |",
             "|---|---|---|---|---|---|---|",
-            (. as $rows | ("004999a", "0b7bf83", "4db0db2") as $c | ("A", "B", "C", "D") as $s
+            (. as $rows | ("cd5982c", "aa66be2") as $c | ("A", "B", "C", "D") as $s
               | ($rows | map(select(.commit == $c and .scenario == $s)) | first) as $r
               | if $r == null then "| \($c) | \($s) | missing | | | | |"
                 else "| \($c) | \($s) | \(if $r.pass then "pass" else "fail" end) | \($r.error // "" | cell) | \(($r.detail // "")[:200] | cell) | \($r.wall_ms // "") | \($r.hid_opens // "") |"
@@ -126,7 +138,7 @@ jobs:
             def busy: .detail // "" | contains("Ledger is busy");
             "| commit | runs | busy A | busy B | busy C | busy D | other failures |",
             "|---|---|---|---|---|---|---|",
-            (. as $rows | ("4db0db2", "4db0db2+claim") as $c
+            (. as $rows | ("cd5982c", "cd5982c+claim", "aa66be2", "aa66be2+claim") as $c
               | ($rows | map(select(.commit == $c and (.pass | not)))) as $f
               | "| \($c) | \($rows | map(select(.commit == $c and .scenario == "A")) | length) | \([("A", "B", "C", "D") as $s | $f | map(select(.scenario == $s and busy)) | length] | join(" | ")) | \($f | map(select(busy | not)) | length) |")
           ' /dev/null results/*.jsonl >> results.md
@@ -139,6 +151,6 @@ jobs:
           jq -se 'all(.[]; .pass or ((.detail // "") != ""))' results/*.jsonl
           if [ "$GITHUB_EVENT_NAME" = push ]; then
             for scenario in A B C D; do
-              grep -q "^| 4db0db2 | $scenario | pass |" results.md
+              grep -q "^| aa66be2 | $scenario | pass |" results.md
             done
           fi
