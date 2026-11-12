@@ -91,6 +91,17 @@ Run https://github.com/caliperforge/ledger-rig/actions/runs/43130238317 (workflo
 
 Verdict: race confirmed.
 
+## Busy failures (11-12)
+
+Run https://github.com/caliperforge/ledger-rig/actions/runs/43281042252 (workflow_dispatch, `repeat: 20`, commit `a2bd6f3c045b8a1effe9f707b9aebb8430b705b6`):
+
+| commit | runs | busy A | busy B | busy C | busy D | other failures | job |
+|---|---|---|---|---|---|---|---|
+| cd5982c | 20 | 4 | 4 | 0 | 0 | 20 | https://github.com/caliperforge/ledger-rig/actions/runs/43281042252/job/131402063315 |
+| cd5982c+claim | 20 | 0 | 0 | 0 | 0 | 20 | https://github.com/caliperforge/ledger-rig/actions/runs/43281042252/job/131402063459 |
+| aa66be2 | 20 | 2 | 4 | 0 | 0 | 0 | https://github.com/caliperforge/ledger-rig/actions/runs/43281042252/job/131402063297 |
+| aa66be2+claim | 20 | 0 | 0 | 0 | 0 | 0 | https://github.com/caliperforge/ledger-rig/actions/runs/43281042252/job/131402063118 |
+
 ## Limit
 
 emulated Speculos devices on Linux hidraw, not physical Ledgers, and not macOS
