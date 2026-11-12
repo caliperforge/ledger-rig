@@ -8,12 +8,14 @@ use solana_keychain::traits::SolanaSigner;
 use solana_keychain::{LedgerConfig, LedgerSigner, SignerError};
 
 const USAGE: &str =
-    "usage: keychain-harness <A|B|C|D> <commit> <hidraw0000> <hidraw0001> <key0000> <key0001>";
+    "usage: keychain-harness <A|B|C|D|E> <commit> <hidraw0000> <hidraw0001> <key0000> <key0001>";
 const READS: usize = 50;
 const RESTART_BEFORE: usize = 26;
 const TIMEOUT: Duration = Duration::from_secs(60);
 const BRIDGE_0001: [&str; 4] = ["ledger_rig", "bridge", "--serial", "0001"];
 const NO_ERROR_VALUE: &str = "is_available() returned false; no error value";
+const BUSY_INFERRED: &str =
+    "is_available() call 2 of 2 returned false back to back; busy inferred, no error value";
 
 struct Run {
     hidraw: [String; 2],
@@ -69,6 +71,7 @@ async fn main() {
                 "B" => scenario_b(&run).await,
                 "C" => outcome(scenario_c(&run).await),
                 "D" => outcome(scenario_d(&run).await),
+                "E" => outcome(scenario_e(&run).await),
                 _ => (false, Some(format!("unknown scenario {scenario}").into())),
             }
         }
@@ -173,6 +176,19 @@ async fn scenario_d(run: &Run) -> Result<(), Failure> {
     let _second = connect(Some(&path))?;
     let key = read(&held).await.map_err(|e| e.at(2))?;
     Ok(check(run, 2, 0, &key)?)
+}
+
+async fn scenario_e(run: &Run) -> Result<(), Failure> {
+    let signer = connect(Some(&run.hidraw[0]))?;
+    let key = read(&signer).await.map_err(|e| e.at(1))?;
+    check(run, 1, 0, &key)?;
+    if !signer.is_available().await {
+        return Err(Failure {
+            error: "read 2: signer unavailable".to_string(),
+            detail: BUSY_INFERRED.to_string(),
+        });
+    }
+    Ok(())
 }
 
 fn connect(path: Option<&str>) -> Result<LedgerSigner, Failure> {
