@@ -129,6 +129,29 @@ jobs:
         with:
           name: bridge-logs-${{ matrix.commit }}
           path: logs
+  open-app:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: caliperforge/solana-keychain
+          path: keychain
+          fetch-depth: 0
+      - run: |
+          git -C keychain fetch https://github.com/solana-foundation/solana-keychain cd5982c283e30328f1a0f13e754748633eb6bd06
+          git -C keychain checkout --detach cd5982c283e30328f1a0f13e754748633eb6bd06
+      - run: sudo apt-get install -y -qq libudev-dev pkg-config
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: ./
+        with:
+          count: 1
+          dashboard: true
+      - working-directory: keychain/rust
+        run: |
+          bin=$(cargo test --no-run --lib --no-default-features --features all,sdk-v3,unsafe-debug,integration-tests,ledger --message-format=json | jq -r 'select(.profile.test == true) | .executable')
+          sudo "$bin" tests::test_ledger_integration::tests::test_ledger_integration_open_app --exact --ignored --nocapture | tee open-app.log
+          grep -q 'test_ledger_integration_open_app ... ok' open-app.log
   table:
     needs: run
     if: always()

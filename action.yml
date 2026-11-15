@@ -7,6 +7,9 @@ inputs:
   app-tag:
     description: app-solana commit the ELF is built from
     default: af6ed454f0ed39cad8a5e1bca544ced18350a403
+  dashboard:
+    description: Start each device as the BOLOS dashboard
+    default: false
 outputs:
   hidraw:
     description: Space-separated hidraw paths, one per device
@@ -41,7 +44,9 @@ runs:
       env:
         COUNT: ${{ inputs.count }}
         TAG: ${{ inputs.app-tag }}
+        DASHBOARD: ${{ inputs.dashboard }}
       run: |
-        hidraw=$(sudo "$RUNNER_TEMP/ledger-rig/bin/python" -m ledger_rig up --count "$COUNT" --app "$RUNNER_TEMP/apps/solana-nanosp-$TAG.elf" | cut -d' ' -f1 | paste -sd' ')
+        [ "$DASHBOARD" = true ] && dashboard=--dashboard
+        hidraw=$(sudo "$RUNNER_TEMP/ledger-rig/bin/python" -m ledger_rig up --count "$COUNT" --app "$RUNNER_TEMP/apps/solana-nanosp-$TAG.elf" $dashboard | cut -d' ' -f1 | paste -sd' ')
         sudo chmod a+rw $hidraw
         echo "hidraw=$hidraw" >> "$GITHUB_OUTPUT"
