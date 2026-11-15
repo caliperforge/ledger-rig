@@ -1,4 +1,6 @@
+import os
 import re
+import select
 import socket
 import subprocess
 import sys
@@ -15,6 +17,10 @@ from ledger_rig.framing import REPORT_SIZE, Decoder, FramingError, encode
 
 APDU = bytes.fromhex("e001000000")
 REPLY = bytes.fromhex("0102039000")
+GET_APP = bytes.fromhex("b001000000")
+BOLOS = bytes.fromhex("0105424f4c4f5305312e302e309000")
+OPEN_SOLANA = bytes.fromhex("e0d8000006") + b"Solana"
+OPEN_BITCOIN = bytes.fromhex("e0d8000007") + b"Bitcoin"
 ISO = r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}"
 
 
@@ -30,6 +36,12 @@ def _paths() -> list[bytes]:
 
     devices = hid.enumerate(VENDOR)
     return [d["path"] for d in devices if d["serial_number"] == "0001"]
+
+
+def _send(fd: int, apdu: bytes) -> bytes | None:
+    os.write(fd, encode(apdu)[0])
+    assert select.select([fd], [], [], 5)[0]
+    return Decoder().feed(os.read(fd, REPORT_SIZE))
 
 
 def test_create2_is_one_event():
@@ -154,6 +166,52 @@ def test_command_line_logs_each_apdu_and_exits_on_close():
     sent, received = stderr.splitlines()
     assert re.fullmatch(rf"{ISO} -> 20 {apdu[:16].hex()}", sent)
     assert re.fullmatch(rf"{ISO} <- 20 9000 {reply[:16].hex()}", received)
+    _wait_for(lambda: not _paths())
+
+
+@pytest.mark.uhid
+def test_dashboard_answers_bolos_then_opens_solana_at_a_new_hidraw_path():
+    server = FakeApdu({APDU: REPLY})
+    process = subprocess.Popen(
+        [sys.executable, "-m", "ledger_rig", "bridge", "--dashboard"]
+        + ["--apdu", f"127.0.0.1:{server.port}", "--serial", "0001"]
+    )
+    _wait_for(_paths)
+    (old,) = _paths()
+    dashboard = os.open(old, os.O_RDWR)
+    assert _send(dashboard, APDU) == bytes.fromhex("6e00")
+    assert _send(dashboard, GET_APP) == BOLOS
+    assert _send(dashboard, OPEN_SOLANA) == bytes.fromhex("9000")
+    _wait_for(lambda: _paths() not in ([], [old]))
+    (new,) = _paths()
+    os.close(dashboard)
+    solana = os.open(new, os.O_RDWR)
+    assert _send(solana, APDU) == REPLY
+    os.close(solana)
+
+    server.close()
+    assert process.wait(timeout=5) == 0
+    _wait_for(lambda: not _paths())
+
+
+@pytest.mark.uhid
+def test_dashboard_refuses_another_app_and_keeps_its_path():
+    server = FakeApdu({})
+    bridge = threading.Thread(
+        target=Bridge("127.0.0.1", server.port, "0001", dashboard=True).run
+    )
+    bridge.start()
+    _wait_for(_paths)
+    paths = _paths()
+    fd = os.open(paths[0], os.O_RDWR)
+    assert _send(fd, OPEN_BITCOIN) == bytes.fromhex("6807")
+    assert _send(fd, GET_APP) == BOLOS
+    os.close(fd)
+    assert _paths() == paths
+
+    server.close()
+    bridge.join(timeout=5)
+    assert not bridge.is_alive()
     _wait_for(lambda: not _paths())
 
 

@@ -20,11 +20,13 @@ def main(argv: list[str] | None = None) -> None:
     bridge.add_argument("--apdu", type=_address, required=True)
     bridge.add_argument("--serial", required=True)
     bridge.add_argument("--locked", action="store_true")
+    bridge.add_argument("--dashboard", action="store_true")
     up = commands.add_parser("up")
     up.add_argument("--count", type=int, required=True)
     up.add_argument("--app", required=True)
     up.add_argument("--seeds", nargs="+")
     up.add_argument("--locked", action="store_true")
+    up.add_argument("--dashboard", action="store_true")
     commands.add_parser("down")
     for command in ("lock", "unlock"):
         commands.add_parser(command).add_argument("serial")
@@ -41,7 +43,8 @@ def main(argv: list[str] | None = None) -> None:
         seeds = args.seeds or SEEDS[: args.count]
         if len(seeds) != args.count:
             parser.error(f"--count {args.count} needs {args.count} seeds")
-        for path, serial, port, api in rig.up(args.app, seeds, args.locked):
+        devices = rig.up(args.app, seeds, args.locked, args.dashboard)
+        for path, serial, port, api in devices:
             print(f"{path} {serial} {port} {api}")
         return
     if args.command == "down":
@@ -79,7 +82,7 @@ def main(argv: list[str] | None = None) -> None:
         return
     host, port = args.apdu
     logging.basicConfig(level=logging.INFO, format="%(message)s")
-    Bridge(host, port, args.serial, locked=args.locked).run()
+    Bridge(host, port, args.serial, locked=args.locked, dashboard=args.dashboard).run()
 
 
 if __name__ == "__main__":

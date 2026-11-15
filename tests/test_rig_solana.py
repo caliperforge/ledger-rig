@@ -94,7 +94,7 @@ def test_up_refuses_bad_arguments_before_starting(argv, error, monkeypatch, caps
 
 def test_up_locked_passes_locked_to_rig(monkeypatch):
     calls = []
-    monkeypatch.setattr(rig, "up", lambda _, __, locked: calls.append(locked) or [])
+    monkeypatch.setattr(rig, "up", lambda _, __, *flags: calls.append(flags) or [])
     main(["up", "--count", "1", "--app", "a.elf", "--locked"])
     main(["up", "--count", "1", "--app", "a.elf"])
-    assert calls == [True, False]
+    assert calls == [(True, False), (False, False)]

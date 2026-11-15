@@ -19,6 +19,7 @@ pip install -e .
 ```sh
 bash scripts/build-solana-app.sh <tag>
 sudo python -m ledger_rig up --count 2 --app apps/solana-nanosp-<tag>.elf
+sudo python -m ledger_rig up --count 2 --app apps/solana-nanosp-<tag>.elf --dashboard
 sudo python -m ledger_rig down
 ```
 
@@ -34,6 +35,7 @@ python -m ledger_rig reject 0000
 
 ```sh
 sudo python -m ledger_rig bridge --apdu 127.0.0.1:9999 --serial 0001
+sudo python -m ledger_rig bridge --apdu 127.0.0.1:9999 --serial 0001 --dashboard
 sudo python -m ledger_rig unlock 0001
 sudo python -m ledger_rig lock 0001
 ```
@@ -41,6 +43,8 @@ sudo python -m ledger_rig lock 0001
 `9999` is the Speculos APDU port. Run one bridge per device, each with its own `--serial`.
 
 With `--locked` on `bridge` or `up`, a bridge starts locked: it answers every APDU with `5515` and forwards nothing. `unlock <serial>` makes it forward, `lock <serial>` locks it again; both reach the bridge through `/tmp/ledger-rig/bridge-<serial>.sock`.
+
+With `--dashboard` on `bridge` or `up`, the device starts as the BOLOS dashboard: it answers get-app-and-version with `BOLOS` and refuses other APDUs. Opening `Solana` answers `9000`, recreates the device at a new `/dev/hidraw*` path and forwards to Speculos from then on.
 
 The bridge logs one line per APDU, command then response with its status word:
 
@@ -79,6 +83,7 @@ sudo python -m ledger_rig hold 0001 --every 2
 - hidraw behaviour only, not USB descriptors or macOS IOKit
 - At most 2 devices
 - Nano S Plus only
+- Dashboard mode emulates only the hidraw path change on app launch, not the USB PID change
 
 ## Tests
 
