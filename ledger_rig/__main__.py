@@ -1,8 +1,10 @@
 import argparse
 import logging
+import os
 
 from ledger_rig import buttons, rig
 from ledger_rig.bridge import Bridge, control
+from ledger_rig.hold import hold, node
 from ledger_rig.seeds import SEEDS
 
 
@@ -31,6 +33,9 @@ def main(argv: list[str] | None = None) -> None:
     press.add_argument("button", choices=["left", "right", "both"])
     commands.add_parser("approve").add_argument("serial")
     commands.add_parser("reject").add_argument("serial")
+    holding = commands.add_parser("hold")
+    holding.add_argument("serial")
+    holding.add_argument("--every", type=float, default=2)
     args = parser.parse_args(argv)
     if args.command == "up":
         seeds = args.seeds or SEEDS[: args.count]
@@ -59,6 +64,18 @@ def main(argv: list[str] | None = None) -> None:
             buttons.walk(api, buttons.APPROVE)
         else:
             buttons.walk(api, buttons.REJECT)
+        return
+    if args.command == "hold":
+        path = node(args.serial)
+        if path is None:
+            parser.error(f"no hidraw node for serial {args.serial}")
+        fd = os.open(path, os.O_RDWR)
+        try:
+            hold(fd, args.every)
+        except KeyboardInterrupt:
+            pass
+        finally:
+            os.close(fd)
         return
     host, port = args.apdu
     logging.basicConfig(level=logging.INFO, format="%(message)s")
