@@ -57,6 +57,12 @@ A locked bridge logs its reply as `<- 2 5515 5515`.
 
 It exits once the APDU socket closes.
 
+```sh
+sudo python -m ledger_rig hold 0001 --every 2
+```
+
+`hold` is a stand-in for another app holding the Ledger, such as Ledger Live. It opens the device's `/dev/hidraw*` node and sends get-app-version (`e001000000`) every `--every` seconds (default 2) until interrupted. This is not Ledger Live's real traffic, which was never checked.
+
 ## GitHub Action
 
 ```yaml

@@ -102,6 +102,25 @@ jobs:
               jq -c --argjson opens "$opens" '. + {hid_opens: $opens}' "line-$scenario" >> "results-$COMMIT.jsonl"
             done
           done
+      - env:
+          KEYS: ${{ steps.keys.outputs.keys }}
+        run: |
+          sudo "$RUNNER_TEMP/ledger-rig/bin/python" -m ledger_rig down
+          while [ -e /tmp/ledger-rig/bridge-0000.sock ]; do
+            [ "$SECONDS" -lt 60 ] || { echo "bridge-0000.sock still there after 60 s" >&2; exit 1; }
+            sleep 1
+          done
+          hidraw=$(sudo "$RUNNER_TEMP/ledger-rig/bin/python" -m ledger_rig up --count 1 --locked --app "$RUNNER_TEMP"/apps/solana-nanosp-*.elf | cut -d' ' -f1)
+          size=$(stat -c %s /tmp/ledger-rig/bridge-0000.log)
+          status=0
+          sudo env PATH="$RUNNER_TEMP/ledger-rig/bin:$PATH" \
+            harness/keychain/target/release/keychain-harness F "$COMMIT" "$hidraw" - $KEYS > line-F || status=$?
+          tail -c +$((size + 1)) /tmp/ledger-rig/bridge-0000.log > "logs/bridge-0000-$COMMIT-F.log"
+          if [ ! -s line-F ]; then
+            jq -nc --arg commit "$COMMIT" --arg error "no result (exit $status)" \
+              '{$commit, scenario: "F", pass: false, $error, detail: $error}' > line-F
+          fi
+          cat line-F >> "results-$COMMIT.jsonl"
       - uses: actions/upload-artifact@v4
         with:
           name: results-${{ matrix.commit }}
@@ -126,7 +145,7 @@ jobs:
             def cell: tostring | gsub("\\|"; "\\|") | gsub("\n"; " ");
             "| commit | scenario | result | error | detail | wall ms | HID opens |",
             "|---|---|---|---|---|---|---|",
-            (. as $rows | ("cd5982c", "aa66be2") as $c | ("A", "B", "C", "D", "E") as $s
+            (. as $rows | ("cd5982c", "aa66be2") as $c | ("A", "B", "C", "D", "E", "F") as $s
               | ($rows | map(select(.commit == $c and .scenario == $s)) | first) as $r
               | if $r == null then "| \($c) | \($s) | missing | | | | |"
                 else "| \($c) | \($s) | \(if $r.pass then "pass" else "fail" end) | \($r.error // "" | cell) | \(($r.detail // "")[:200] | cell) | \($r.wall_ms // "") | \($r.hid_opens // "") |"
@@ -138,7 +157,7 @@ jobs:
             "| commit | runs | busy A | busy B | busy C | busy D | busy E (2× is_available, 1 device) | other failures |",
             "|---|---|---|---|---|---|---|---|",
             (. as $rows | ("cd5982c", "cd5982c+claim", "aa66be2", "aa66be2+claim") as $c
-              | ($rows | map(select(.commit == $c and (.pass | not)))) as $f
+              | ($rows | map(select(.commit == $c and .scenario != "F" and (.pass | not)))) as $f
               | "| \($c) | \($rows | map(select(.commit == $c and .scenario == "A")) | length) | \([("A", "B", "C", "D", "E") as $s | $f | map(select(.scenario == $s and busy)) | length] | join(" | ")) | \($f | map(select(busy | not)) | length) |")
           ' /dev/null results/*.jsonl >> results.md
       - uses: actions/upload-artifact@v4
@@ -152,4 +171,5 @@ jobs:
             for scenario in A B C D E; do
               grep -Eq "^\| aa66be2 \| $scenario \| (pass|fail \|[^|]*\|[^|]*(Ledger is busy|call 2 of 2 returned false)[^|]*) \|" results.md
             done
+            jq -se '[.[] | select(.scenario == "F")] | length == 4 and all(.pass)' results/*.jsonl
           fi
