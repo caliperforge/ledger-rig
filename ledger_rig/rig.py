@@ -19,7 +19,7 @@ T = TypeVar("T")
 
 def up(
     app: str, seeds: Sequence[str], locked: bool = False
-) -> list[tuple[str, str, int]]:
+) -> list[tuple[str, str, int, int]]:
     elf = Path(app).resolve()
     LOGS.mkdir(exist_ok=True)
     devices = []
@@ -35,6 +35,7 @@ def up(
         )
         _poll(partial(_answers, api))
         serial = f"{i:04d}"
+        (LOGS / f"api-{serial}").write_text(str(api))
         with (LOGS / f"bridge-{serial}.log").open("ab") as stderr:
             bridge = subprocess.Popen(
                 [sys.executable, "-m", "ledger_rig", "bridge"]
@@ -45,7 +46,7 @@ def up(
                 stderr=stderr,
                 start_new_session=True,
             )
-        devices.append((_poll(partial(_hidraw, serial, bridge)), serial, apdu))
+        devices.append((_poll(partial(_hidraw, serial, bridge)), serial, apdu, api))
     return devices
 
 
