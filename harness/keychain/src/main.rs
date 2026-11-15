@@ -8,7 +8,7 @@ use solana_keychain::traits::SolanaSigner;
 use solana_keychain::{LedgerConfig, LedgerSigner, SignerError};
 
 const USAGE: &str =
-    "usage: keychain-harness <A|B|C|D|E> <commit> <hidraw0000> <hidraw0001> <key0000> <key0001>";
+    "usage: keychain-harness <A|B|C|D|E|F> <commit> <hidraw0000> <hidraw0001> <key0000> <key0001>";
 const READS: usize = 50;
 const RESTART_BEFORE: usize = 26;
 const TIMEOUT: Duration = Duration::from_secs(60);
@@ -16,6 +16,7 @@ const BRIDGE_0001: [&str; 4] = ["ledger_rig", "bridge", "--serial", "0001"];
 const NO_ERROR_VALUE: &str = "is_available() returned false; no error value";
 const BUSY_INFERRED: &str =
     "is_available() call 2 of 2 returned false back to back; busy inferred, no error value";
+const LOCKED: &str = "the Ledger is locked";
 
 struct Run {
     hidraw: [String; 2],
@@ -72,6 +73,7 @@ async fn main() {
                 "C" => outcome(scenario_c(&run).await),
                 "D" => outcome(scenario_d(&run).await),
                 "E" => outcome(scenario_e(&run).await),
+                "F" => scenario_f(&run).await,
                 _ => (false, Some(format!("unknown scenario {scenario}").into())),
             }
         }
@@ -191,6 +193,33 @@ async fn scenario_e(run: &Run) -> Result<(), Failure> {
     Ok(())
 }
 
+async fn scenario_f(run: &Run) -> (bool, Option<Failure>) {
+    let locked = match open(LedgerConfig {
+        auto_open_app: true,
+        host_device_path: Some(run.hidraw[0].as_str().into()),
+        ..LedgerConfig::default()
+    }) {
+        Ok(_) => return (false, Some("connect succeeded while locked".into())),
+        Err(e) if e.detail.contains(LOCKED) => e,
+        Err(e) => return (false, Some(e)),
+    };
+    let unlocked = Command::new("python")
+        .args(["-m", "ledger_rig", "unlock", "0000"])
+        .status();
+    if !unlocked.is_ok_and(|s| s.success()) {
+        return (false, Some("ledger_rig unlock 0000 failed".into()));
+    }
+    let signed = async {
+        let signer = connect(Some(&run.hidraw[0]))?;
+        let key = read(&signer).await.map_err(|e| e.at(1))?;
+        Ok::<(), Failure>(check(run, 1, 0, &key)?)
+    };
+    match signed.await {
+        Ok(()) => (true, Some(locked)),
+        Err(e) => (false, Some(e)),
+    }
+}
+
 fn connect(path: Option<&str>) -> Result<LedgerSigner, Failure> {
     let mut config = LedgerConfig {
         auto_open_app: false,
@@ -199,6 +228,10 @@ fn connect(path: Option<&str>) -> Result<LedgerSigner, Failure> {
     if let Some(path) = path {
         config.host_device_path = Some(path.into());
     }
+    open(config)
+}
+
+fn open(config: LedgerConfig) -> Result<LedgerSigner, Failure> {
     LedgerSigner::connect_with(config).map_err(|e| {
         let inner = match &e {
             SignerError::NotAvailable(s)
