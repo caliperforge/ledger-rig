@@ -66,3 +66,12 @@ It exits once the APDU socket closes.
 pytest
 sudo "$(which python)" -m pytest -m uhid
 ```
+
+## Prior art
+
+- [Speculos](https://github.com/LedgerHQ/speculos) is the emulator; this repo only bridges its APDU socket to the host.
+- [Karrq/speculos-hid](https://github.com/Karrq/speculos-hid) (2023) bridged one Speculos to a uhid Ledger first. ledger-rig adds a second device, the GitHub Action, a cached app-solana build and the solana-keychain scenarios in `harness/`.
+
+## License
+
+MIT
