@@ -56,9 +56,7 @@ def _control_path(serial: str) -> Path:
     return rig.LOGS / f"bridge-{serial}.sock"
 
 
-def _serve(
-    fd: int, sock: socket.socket, control: socket.socket, locked: bool
-) -> None:
+def _serve(fd: int, sock: socket.socket, control: socket.socket, locked: bool) -> None:
     decoder = framing.Decoder()
     while sock not in (ready := select.select([fd, sock, control], [], [])[0]):
         if control in ready:
