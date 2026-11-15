@@ -1,5 +1,6 @@
+use std::future::Future;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 use std::{env, fs, thread};
 
@@ -8,7 +9,8 @@ use solana_keychain::traits::SolanaSigner;
 use solana_keychain::{LedgerConfig, LedgerSigner, SignerError};
 
 const USAGE: &str =
-    "usage: keychain-harness <A|B|C|D|E|F> <commit> <hidraw0000> <hidraw0001> <key0000> <key0001>";
+    "usage: keychain-harness <A|B|C|D|E|F|G> <commit> <hidraw0000> <hidraw0001> <key0000> <key0001>";
+const MESSAGE: &[u8] = b"keychain-harness scenario G";
 const READS: usize = 50;
 const RESTART_BEFORE: usize = 26;
 const TIMEOUT: Duration = Duration::from_secs(60);
@@ -38,6 +40,11 @@ impl Failure {
 
     fn at(mut self, i: usize) -> Self {
         self.error = format!("read {i}: {}", self.error);
+        self
+    }
+
+    fn on(mut self, step: &str) -> Self {
+        self.error = format!("{step}: {}", self.error);
         self
     }
 }
@@ -74,6 +81,7 @@ async fn main() {
                 "D" => outcome(scenario_d(&run).await),
                 "E" => outcome(scenario_e(&run).await),
                 "F" => scenario_f(&run).await,
+                "G" => scenario_g(&run).await,
                 _ => (false, Some(format!("unknown scenario {scenario}").into())),
             }
         }
@@ -220,6 +228,46 @@ async fn scenario_f(run: &Run) -> (bool, Option<Failure>) {
     }
 }
 
+async fn scenario_g(run: &Run) -> (bool, Option<Failure>) {
+    let signed = reject_then_approve(run).await;
+    (signed.is_ok(), Some(signed.unwrap_or_else(|e| e)))
+}
+
+async fn reject_then_approve(run: &Run) -> Result<Failure, Failure> {
+    let signer = connect(Some(&run.hidraw[0]))?;
+    let (_, argv) = bridge_0001().ok_or("bridge 0001 not running")?;
+    let mut rejected = match pressing(&argv[0], "reject", signer.sign_message(MESSAGE)).await? {
+        Ok(_) => return Err("sign 1 returned a signature".into()),
+        Err(e @ SignerError::UserRejected(_)) => failure(e),
+        Err(e) => return Err(failure(e).on("sign 1")),
+    };
+    let signature = pressing(&argv[0], "approve", signer.sign_message(MESSAGE))
+        .await?
+        .map_err(|e| failure(e).on("sign 2"))?;
+    rejected.detail = format!("{}; sign 2: {signature}", rejected.detail);
+    Ok(rejected)
+}
+
+async fn pressing<T>(
+    python: &str,
+    choice: &str,
+    sign: impl Future<Output = T>,
+) -> Result<T, String> {
+    let mut child = Command::new(python)
+        .args(["-m", "ledger_rig", choice, "0000"])
+        .stdout(Stdio::null())
+        .spawn()
+        .map_err(|e| format!("spawn ledger_rig {choice}: {e}"))?;
+    let signed = sign.await;
+    let status = child
+        .wait()
+        .map_err(|e| format!("wait ledger_rig {choice}: {e}"))?;
+    if !status.success() {
+        return Err(format!("ledger_rig {choice} exited with {status}"));
+    }
+    Ok(signed)
+}
+
 fn connect(path: Option<&str>) -> Result<LedgerSigner, Failure> {
     let mut config = LedgerConfig {
         auto_open_app: false,
@@ -232,22 +280,24 @@ fn connect(path: Option<&str>) -> Result<LedgerSigner, Failure> {
 }
 
 fn open(config: LedgerConfig) -> Result<LedgerSigner, Failure> {
-    LedgerSigner::connect_with(config).map_err(|e| {
-        let inner = match &e {
-            SignerError::NotAvailable(s)
-            | SignerError::UserRejected(s)
-            | SignerError::ConfigError(s)
-            | SignerError::IoError(s)
-            | SignerError::Other(s)
-            | SignerError::SigningFailed(s)
-            | SignerError::InvalidPublicKey(s) => s.clone(),
-            _ => e.to_string(),
-        };
-        Failure {
-            error: e.to_string(),
-            detail: format!("{e:?}: {inner}"),
-        }
-    })
+    LedgerSigner::connect_with(config).map_err(failure)
+}
+
+fn failure(e: SignerError) -> Failure {
+    let inner = match &e {
+        SignerError::NotAvailable(s)
+        | SignerError::UserRejected(s)
+        | SignerError::ConfigError(s)
+        | SignerError::IoError(s)
+        | SignerError::Other(s)
+        | SignerError::SigningFailed(s)
+        | SignerError::InvalidPublicKey(s) => s.clone(),
+        _ => e.to_string(),
+    };
+    Failure {
+        error: e.to_string(),
+        detail: format!("{e:?}: {inner}"),
+    }
 }
 
 async fn read(signer: &LedgerSigner) -> Result<String, Failure> {

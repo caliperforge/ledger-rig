@@ -82,7 +82,7 @@ jobs:
               node=${node%/device/uevent}
               hidraw+=("/dev/${node##*/}")
             done
-            for scenario in A B C D E; do
+            for scenario in A B C D E G; do
               for serial in 0000 0001; do
                 size[$serial]=$(stat -c %s "/tmp/ledger-rig/bridge-$serial.log" 2>/dev/null || echo 0)
               done
@@ -145,7 +145,7 @@ jobs:
             def cell: tostring | gsub("\\|"; "\\|") | gsub("\n"; " ");
             "| commit | scenario | result | error | detail | wall ms | HID opens |",
             "|---|---|---|---|---|---|---|",
-            (. as $rows | ("cd5982c", "aa66be2") as $c | ("A", "B", "C", "D", "E", "F") as $s
+            (. as $rows | ("cd5982c", "aa66be2") as $c | ("A", "B", "C", "D", "E", "F", "G") as $s
               | ($rows | map(select(.commit == $c and .scenario == $s)) | first) as $r
               | if $r == null then "| \($c) | \($s) | missing | | | | |"
                 else "| \($c) | \($s) | \(if $r.pass then "pass" else "fail" end) | \($r.error // "" | cell) | \(($r.detail // "")[:200] | cell) | \($r.wall_ms // "") | \($r.hid_opens // "") |"
@@ -171,5 +171,6 @@ jobs:
             for scenario in A B C D E; do
               grep -Eq "^\| aa66be2 \| $scenario \| (pass|fail \|[^|]*\|[^|]*(Ledger is busy|call 2 of 2 returned false)[^|]*) \|" results.md
             done
+            grep -Eq '^\| aa66be2 \| G \| pass \|[^|]*\|[^|]*UserRejected' results.md
             jq -se '[.[] | select(.scenario == "F")] | length == 4 and all(.pass)' results/*.jsonl
           fi
