@@ -18,7 +18,7 @@ T = TypeVar("T")
 
 
 def up(
-    app: str, seeds: Sequence[str], locked: bool = False
+    app: str, seeds: Sequence[str], locked: bool = False, dashboard: bool = False
 ) -> list[tuple[str, str, int, int]]:
     elf = Path(app).resolve()
     LOGS.mkdir(exist_ok=True)
@@ -40,7 +40,8 @@ def up(
             bridge = subprocess.Popen(
                 [sys.executable, "-m", "ledger_rig", "bridge"]
                 + ["--apdu", f"127.0.0.1:{apdu}", "--serial", serial]
-                + (["--locked"] if locked else []),
+                + (["--locked"] if locked else [])
+                + (["--dashboard"] if dashboard else []),
                 stdin=subprocess.DEVNULL,
                 stdout=subprocess.DEVNULL,
                 stderr=stderr,
