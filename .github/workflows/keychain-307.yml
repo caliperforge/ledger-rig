@@ -99,7 +99,7 @@ jobs:
                   '{$commit, $scenario, pass: false, $error, detail: $error}' > "line-$scenario"
               fi
               opens=$(grep -c '"/dev/hidraw' "trace-$scenario" || true)
-              jq -c --argjson opens "$opens" '. + {hid_opens: $opens}' "line-$scenario" >> "results-$COMMIT.jsonl"
+              tail -n 1 "line-$scenario" | jq -c --argjson opens "$opens" '. + {hid_opens: $opens}' >> "results-$COMMIT.jsonl"
             done
           done
       - env:
