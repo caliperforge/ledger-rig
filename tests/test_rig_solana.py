@@ -62,14 +62,14 @@ def test_up_serves_one_solana_key_per_seed_and_down_removes_them():
             check=True,
         )
         devices = [line.split() for line in up.stdout.splitlines()]
-        assert [serial for _, serial, _ in devices] == ["0000", "0001"]
-        replies = [_exchange(path) for path, _, _ in devices]
+        assert [serial for _, serial, _, _ in devices] == ["0000", "0001"]
+        replies = [_exchange(path) for path, _, _, _ in devices]
     finally:
         subprocess.run([sys.executable, "-m", "ledger_rig", "down"], check=True)
         _wait_for(lambda: not _rig_serials())
     assert replies[0] != replies[1]
     assert replies == [_solana_key(m) + b"\x90\x00" for m in SEEDS]
-    for (_, serial, _), reply in zip(devices, replies, strict=True):
+    for (_, serial, _, _), reply in zip(devices, replies, strict=True):
         log = (rig.LOGS / f"bridge-{serial}.log").read_text().splitlines()
         sent = rf"{ISO} -> {len(GET_PUBKEY)} {GET_PUBKEY[:16].hex()}"
         assert re.fullmatch(sent, log[-2])

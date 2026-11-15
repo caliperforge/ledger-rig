@@ -1,7 +1,7 @@
 import argparse
 import logging
 
-from ledger_rig import rig
+from ledger_rig import buttons, rig
 from ledger_rig.bridge import Bridge, control
 from ledger_rig.seeds import SEEDS
 
@@ -26,13 +26,18 @@ def main(argv: list[str] | None = None) -> None:
     commands.add_parser("down")
     for command in ("lock", "unlock"):
         commands.add_parser(command).add_argument("serial")
+    press = commands.add_parser("press")
+    press.add_argument("serial")
+    press.add_argument("button", choices=["left", "right", "both"])
+    commands.add_parser("approve").add_argument("serial")
+    commands.add_parser("reject").add_argument("serial")
     args = parser.parse_args(argv)
     if args.command == "up":
         seeds = args.seeds or SEEDS[: args.count]
         if len(seeds) != args.count:
             parser.error(f"--count {args.count} needs {args.count} seeds")
-        for path, serial, port in rig.up(args.app, seeds, args.locked):
-            print(f"{path} {serial} {port}")
+        for path, serial, port, api in rig.up(args.app, seeds, args.locked):
+            print(f"{path} {serial} {port} {api}")
         return
     if args.command == "down":
         rig.down()
@@ -42,6 +47,18 @@ def main(argv: list[str] | None = None) -> None:
             control(args.serial, args.command)
         except OSError:
             parser.error(f"no bridge {args.serial}")
+        return
+    if args.command in ("press", "approve", "reject"):
+        try:
+            api = buttons.port(args.serial)
+        except LookupError:
+            parser.error(f"no device {args.serial}: run up first")
+        if args.command == "press":
+            buttons.press(api, args.button)
+        elif args.command == "approve":
+            buttons.walk(api, buttons.APPROVE)
+        else:
+            buttons.walk(api, buttons.REJECT)
         return
     host, port = args.apdu
     logging.basicConfig(level=logging.INFO, format="%(message)s")

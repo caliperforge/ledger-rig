@@ -22,7 +22,15 @@ sudo python -m ledger_rig up --count 2 --app apps/solana-nanosp-<tag>.elf
 sudo python -m ledger_rig down
 ```
 
-`up` starts one Speculos container and one bridge per device and prints `<hidraw> <serial> <apdu port>` for each. Each bridge appends its log to `/tmp/ledger-rig/bridge-<serial>.log`. `down` removes the containers; their bridges exit with them.
+`up` starts one Speculos container and one bridge per device and prints `<hidraw> <serial> <apdu port> <api port>` for each. Each bridge appends its log to `/tmp/ledger-rig/bridge-<serial>.log`. `down` removes the containers; their bridges exit with them.
+
+```sh
+python -m ledger_rig press 0000 right
+python -m ledger_rig approve 0000
+python -m ledger_rig reject 0000
+```
+
+`press` sends one `left`, `right` or `both` button press to that device's Speculos API. `approve` and `reject` wait for a Solana sign review, press right through its screens to that choice, then press both.
 
 ```sh
 sudo python -m ledger_rig bridge --apdu 127.0.0.1:9999 --serial 0001
