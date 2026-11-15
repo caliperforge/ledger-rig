@@ -90,3 +90,11 @@ def test_up_refuses_bad_arguments_before_starting(argv, error, monkeypatch, caps
         main(argv)
     assert refused.value.code == 2
     assert error in capsys.readouterr().err
+
+
+def test_up_locked_passes_locked_to_rig(monkeypatch):
+    calls = []
+    monkeypatch.setattr(rig, "up", lambda _, __, locked: calls.append(locked) or [])
+    main(["up", "--count", "1", "--app", "a.elf", "--locked"])
+    main(["up", "--count", "1", "--app", "a.elf"])
+    assert calls == [True, False]

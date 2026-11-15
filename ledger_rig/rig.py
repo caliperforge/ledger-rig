@@ -17,7 +17,9 @@ LOGS = Path("/tmp/ledger-rig")
 T = TypeVar("T")
 
 
-def up(app: str, seeds: Sequence[str]) -> list[tuple[str, str, int]]:
+def up(
+    app: str, seeds: Sequence[str], locked: bool = False
+) -> list[tuple[str, str, int]]:
     elf = Path(app).resolve()
     LOGS.mkdir(exist_ok=True)
     devices = []
@@ -36,7 +38,8 @@ def up(app: str, seeds: Sequence[str]) -> list[tuple[str, str, int]]:
         with (LOGS / f"bridge-{serial}.log").open("ab") as stderr:
             bridge = subprocess.Popen(
                 [sys.executable, "-m", "ledger_rig", "bridge"]
-                + ["--apdu", f"127.0.0.1:{apdu}", "--serial", serial],
+                + ["--apdu", f"127.0.0.1:{apdu}", "--serial", serial]
+                + (["--locked"] if locked else []),
                 stdin=subprocess.DEVNULL,
                 stdout=subprocess.DEVNULL,
                 stderr=stderr,

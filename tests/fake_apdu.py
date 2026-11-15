@@ -5,6 +5,7 @@ import threading
 class FakeApdu:
     def __init__(self, replies: dict[bytes, bytes]) -> None:
         self._replies = replies
+        self.received: list[bytes] = []
         self._listener = socket.create_server(("127.0.0.1", 0))
         self.port = self._listener.getsockname()[1]
         self._conn: socket.socket
@@ -16,7 +17,8 @@ class FakeApdu:
         self._listener.close()
         while header := self._conn.recv(4, socket.MSG_WAITALL):
             size = int.from_bytes(header, "big")
-            reply = self._replies[self._conn.recv(size, socket.MSG_WAITALL)]
+            self.received.append(self._conn.recv(size, socket.MSG_WAITALL))
+            reply = self._replies[self.received[-1]]
             self._conn.sendall((len(reply) - 2).to_bytes(4, "big") + reply)
 
     def close(self) -> None:

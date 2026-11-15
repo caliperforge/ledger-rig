@@ -26,9 +26,13 @@ sudo python -m ledger_rig down
 
 ```sh
 sudo python -m ledger_rig bridge --apdu 127.0.0.1:9999 --serial 0001
+sudo python -m ledger_rig unlock 0001
+sudo python -m ledger_rig lock 0001
 ```
 
 `9999` is the Speculos APDU port. Run one bridge per device, each with its own `--serial`.
+
+With `--locked` on `bridge` or `up`, a bridge starts locked: it answers every APDU with `5515` and forwards nothing. `unlock <serial>` makes it forward, `lock <serial>` locks it again; both reach the bridge through `/tmp/ledger-rig/bridge-<serial>.sock`.
 
 The bridge logs one line per APDU, command then response with its status word:
 
@@ -36,6 +40,8 @@ The bridge logs one line per APDU, command then response with its status word:
 2026-11-10T12:00:00.000 -> 5 e001000000
 2026-11-10T12:00:00.004 <- 5 9000 0102039000
 ```
+
+A locked bridge logs its reply as `<- 2 5515 5515`.
 
 It exits once the APDU socket closes.
 

@@ -8,7 +8,7 @@ import time
 import pytest
 from fake_apdu import FakeApdu
 
-from ledger_rig import uhid
+from ledger_rig import rig, uhid
 from ledger_rig.__main__ import main
 from ledger_rig.bridge import VENDOR, Bridge
 from ledger_rig.framing import REPORT_SIZE, Decoder, FramingError, encode
@@ -54,6 +54,39 @@ def test_apdu_round_trips_through_hidraw():
     device.close()
     assert len(report) == REPORT_SIZE
     assert Decoder().feed(report) == REPLY
+
+    server.close()
+    bridge.join(timeout=5)
+    assert not bridge.is_alive()
+    _wait_for(lambda: not _paths())
+
+
+@pytest.mark.uhid
+def test_locked_bridge_answers_5515_until_unlocked_and_after_lock():
+    import hid
+
+    rig.LOGS.mkdir(exist_ok=True)
+    (rig.LOGS / "bridge-0001.sock").touch()
+    server = FakeApdu({APDU: REPLY})
+    bridge = threading.Thread(
+        target=Bridge("127.0.0.1", server.port, "0001", locked=True).run
+    )
+    bridge.start()
+    _wait_for(_paths)
+    device = hid.Device(path=_paths()[0])
+
+    def exchange() -> bytes | None:
+        device.write(encode(APDU)[0])
+        return Decoder().feed(device.read(REPORT_SIZE, timeout=5000))
+
+    assert exchange() == b"\x55\x15"
+    assert server.received == []
+    main(["unlock", "0001"])
+    assert exchange() == REPLY
+    main(["lock", "0001"])
+    assert exchange() == b"\x55\x15"
+    assert server.received == [APDU]
+    device.close()
 
     server.close()
     bridge.join(timeout=5)
@@ -130,6 +163,8 @@ def test_command_line_logs_each_apdu_and_exits_on_close():
         ["bridge", "--apdu", "127.0.0.1", "--serial", "0001"],
         ["bridge", "--apdu", "127.0.0.1:port", "--serial", "0001"],
         ["bridge", "--apdu", "127.0.0.1:9999"],
+        ["unlock"],
+        ["unlock", "9999"],
         [],
     ],
 )
