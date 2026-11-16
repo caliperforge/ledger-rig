@@ -13,7 +13,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        commit: [cd5982c, cd5982c+claim, aa66be2, aa66be2+claim]
+        commit: [4eec372, 8b9d328]
     env:
       COMMIT: ${{ matrix.commit }}
     steps:
