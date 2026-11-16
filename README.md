@@ -75,7 +75,7 @@ sudo python -m ledger_rig hold 0001 --every 2
     LEDGER_HIDRAW: ${{ steps.rig.outputs.hidraw }}
 ```
 
-`hidraw` holds the device paths, space-separated, readable and writable by the job user. `app-tag` sets the app-solana commit; its ELF is built once and cached. The devices are removed after the job's main steps.
+`hidraw` holds the device paths, space-separated, readable and writable by the job user. `app-tag` sets the app-solana commit; its ELF is built once and cached. `dashboard: true` starts each device as the BOLOS dashboard, as `--dashboard` does; the node a device comes back at after opening Solana is root-only. The devices are removed after the job's main steps.
 
 ## Limits
 
