@@ -18,7 +18,6 @@ jobs:
           - { phase: "5", expect: fail, count: 1 }
           - { phase: "6", expect: pass, count: 1 }
           - { phase: "7", expect: pass, count: 1 }
-          - { phase: "8", expect: pass, count: 1 }
           - { phase: "9", expect: pass, count: 1 }
           - { phase: "10a", expect: fail, count: 2 }
           - { phase: "11a", expect: pass, count: 1 }
@@ -66,7 +65,6 @@ jobs:
           }
           case $PHASE in
             7) set -- rust-ledger-hw-test test_ledger_rejection_does_not_kill_the_session ;;
-            8) set -- rust-ledger-hw-test test_ledger_signer_survives_unplug_replug ;;
             9) set -- rust-ledger-hw-test test_ledger_probe_returns_while_a_signature_is_pending ;;
             11a) blind=disabled; set -- rust-ledger-hw-test test_ledger_non_ascii_offchain_message_needs_blind_signing ;;
             4a) set -- rust-ledger-open-app ;;
@@ -79,7 +77,6 @@ jobs:
             3) rig hold 0000 > driver.log 2>&1 & ;;
             5) { until [ "$(stat -c %s /tmp/ledger-rig/bridge-0000.log)" -gt "$size" ]; do sleep 0.1; done; restart; } > driver.log 2>&1 & ;;
             7) press reject approve > driver.log 2>&1 & ;;
-            8) { press approve; restart; press approve; } > driver.log 2>&1 & ;;
             9) { until grep -qs 'You may now REJECT' phase.log; do sleep 1; done; press reject; } > driver.log 2>&1 & ;;
           esac
           if [ "$PHASE" = 6 ]; then

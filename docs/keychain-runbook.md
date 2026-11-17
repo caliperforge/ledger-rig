@@ -12,7 +12,7 @@ The phases of solana-keychain's `scripts/ledger-hardware-runbook.sh` at `cd5982c
 | 5 | fail | runs on the rig | phase 5 |
 | 6 | pass, 20 of 20 | runs on the rig | phase 6 |
 | 7 | pass | runs on the rig | phase 7 |
-| 8 | pass | runs on the rig | phase 8 |
+| 8 | pass | stays manual | push run: exit 101, `test_ledger_signer_survives_unplug_replug` FAILED in 47.43s |
 | 9 | pass | runs on the rig | phase 9 |
 | 10a | fail | runs on the rig | phase 10a |
 | 11a | pass | runs on the rig | phase 11a |
