@@ -1,0 +1,23 @@
+# keychain runbook on the rig
+
+The phases of solana-keychain's `scripts/ledger-hardware-runbook.sh` at `cd5982c`, and which of them `.github/workflows/keychain-runbook.yml` runs.
+
+| phase | runbook expects | rig | job or reason |
+|---|---|---|---|
+| 1 | pass | runs on the rig | phase 1 |
+| 2 | fail | runs on the rig | phase 2 |
+| 3 | fail | runs on the rig | phase 3 |
+| 4a | pass | runs on the rig | phase 4a |
+| 4b | pass | runs on the rig | phase 4b |
+| 5 | fail | runs on the rig | phase 5 |
+| 6 | pass, 20 of 20 | runs on the rig | phase 6 |
+| 7 | pass | runs on the rig | phase 7 |
+| 8 | pass | runs on the rig | phase 8 |
+| 9 | pass | runs on the rig | phase 9 |
+| 10a | fail | runs on the rig | phase 10a |
+| 11a | pass | runs on the rig | phase 11a |
+| 11b | pass | stays manual | the rig cannot turn on blind signing |
+
+The hand-run explicit-path checklist of phase 10a stays manual.
+
+The rig's limits are in the README's [Limits](../README.md#limits).

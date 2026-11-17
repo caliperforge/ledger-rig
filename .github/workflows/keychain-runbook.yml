@@ -1,0 +1,102 @@
+name: keychain-runbook
+on:
+  push:
+  workflow_dispatch:
+jobs:
+  phase:
+    name: phase ${{ matrix.phase }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { phase: "1", expect: pass, count: 1 }
+          - { phase: "2", expect: fail, count: 1, locked: true }
+          - { phase: "3", expect: fail, count: 1 }
+          - { phase: "4a", expect: pass, count: 1, dashboard: true }
+          - { phase: "4b", expect: pass, count: 1, dashboard: true }
+          - { phase: "5", expect: fail, count: 1 }
+          - { phase: "6", expect: pass, count: 1 }
+          - { phase: "7", expect: pass, count: 1 }
+          - { phase: "8", expect: pass, count: 1 }
+          - { phase: "9", expect: pass, count: 1 }
+          - { phase: "10a", expect: fail, count: 2 }
+          - { phase: "11a", expect: pass, count: 1 }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: caliperforge/solana-keychain
+          path: keychain
+          fetch-depth: 0
+      - run: |
+          git -C keychain fetch https://github.com/solana-foundation/solana-keychain cd5982c283e30328f1a0f13e754748633eb6bd06
+          git -C keychain checkout --detach cd5982c283e30328f1a0f13e754748633eb6bd06
+      - run: sudo apt-get install -y -qq libudev-dev pkg-config
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo install just --locked
+      - uses: ./
+        with:
+          count: ${{ matrix.count }}
+          dashboard: ${{ matrix.dashboard || false }}
+      - if: matrix.locked
+        run: |
+          sudo "$RUNNER_TEMP/ledger-rig/bin/python" -m ledger_rig down
+          while [ -e /tmp/ledger-rig/bridge-0000.sock ]; do
+            [ "$SECONDS" -lt 60 ] || { echo "bridge-0000.sock still there after 60 s" >&2; exit 1; }
+            sleep 1
+          done
+          sudo "$RUNNER_TEMP/ledger-rig/bin/python" -m ledger_rig up --count 1 --locked --app "$RUNNER_TEMP"/apps/solana-nanosp-*.elf
+      - working-directory: keychain
+        env:
+          PHASE: ${{ matrix.phase }}
+          EXPECT: ${{ matrix.expect }}
+        run: |
+          rig() { sudo "$RUNNER_TEMP/ledger-rig/bin/python" -m ledger_rig "$@"; }
+          recipe() { sudo env "PATH=$PATH" "HOME=$HOME" ${blind:+"LEDGER_BLIND_SIGNING=$blind"} just "$@"; }
+          press() { for choice; do until rig "$choice" 0000; do :; done; done; }
+          node() { grep -qx HID_UNIQ=0000 /sys/class/hidraw/*/device/uevent; }
+          restart() {
+            pid=$(pgrep -f 'ledger_rig bridge .*--serial 0000')
+            mapfile -d '' argv < "/proc/$pid/cmdline"
+            sudo kill -9 "$pid"
+            while node; do sleep 0.1; done
+            sudo systemd-run --quiet --collect --property=StandardError=append:/tmp/ledger-rig/bridge-0000.log -- "${argv[@]}"
+            until node; do sleep 0.1; done
+          }
+          case $PHASE in
+            7) set -- rust-ledger-hw-test test_ledger_rejection_does_not_kill_the_session ;;
+            8) set -- rust-ledger-hw-test test_ledger_signer_survives_unplug_replug ;;
+            9) set -- rust-ledger-hw-test test_ledger_probe_returns_while_a_signature_is_pending ;;
+            11a) blind=disabled; set -- rust-ledger-hw-test test_ledger_non_ascii_offchain_message_needs_blind_signing ;;
+            4a) set -- rust-ledger-open-app ;;
+            4b) recipe rust-ledger-open-app; set -- rust-test-ledger ;;
+            *) set -- rust-test-ledger ;;
+          esac
+          size=$(stat -c %s /tmp/ledger-rig/bridge-0000.log)
+          case $PHASE in
+            1 | 4b) press approve approve > driver.log 2>&1 & ;;
+            3) rig hold 0000 > driver.log 2>&1 & ;;
+            5) { until [ "$(stat -c %s /tmp/ledger-rig/bridge-0000.log)" -gt "$size" ]; do sleep 0.1; done; restart; } > driver.log 2>&1 & ;;
+            7) press reject approve > driver.log 2>&1 & ;;
+            8) { press approve; restart; press approve; } > driver.log 2>&1 & ;;
+            9) { until grep -qs 'You may now REJECT' phase.log; do sleep 1; done; press reject; } > driver.log 2>&1 & ;;
+          esac
+          if [ "$PHASE" = 6 ]; then
+            status=0
+            for run in $(seq 20); do
+              recipe rust-ledger-hw-reconnect 2>&1 | tee -a phase.log; rc=${PIPESTATUS[0]}
+              echo "run $run of 20: exit $rc"
+              [ "$rc" -le "$status" ] || status=$rc
+            done
+          else
+            recipe "$@" 2>&1 | tee phase.log; status=${PIPESTATUS[0]}
+          fi
+          kill $(jobs -p) 2>/dev/null || true
+          sudo pkill -f 'ledger_rig (approve|reject|hold) 0000' || true
+          cat driver.log 2>/dev/null || true
+          [ "$status" -le 128 ] || { echo "phase $PHASE crashed: signal $((status - 128))" >&2; exit 1; }
+          case $EXPECT:$status in
+            pass:0 | fail:[1-9]*) ;;
+            *) echo "phase $PHASE expected $EXPECT, got exit $status" >&2; exit 1 ;;
+          esac

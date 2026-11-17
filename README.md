@@ -92,6 +92,8 @@ pytest
 sudo "$(which python)" -m pytest -m uhid
 ```
 
+[docs/keychain-runbook.md](docs/keychain-runbook.md) marks which phases of solana-keychain's hardware runbook run on the rig.
+
 ## Prior art
 
 - [Speculos](https://github.com/LedgerHQ/speculos) is the emulator; this repo only bridges its APDU socket to the host.
