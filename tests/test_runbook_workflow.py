@@ -34,8 +34,8 @@ def test_legs_expect_what_the_runbook_expects():
 
 
 def test_every_expectation_has_a_case_arm():
-    workflow = yaml.safe_load((ROOT / ".github/workflows/keychain-runbook.yml").read_text())
-    steps = workflow["jobs"]["phase"]["steps"]
+    workflow = (ROOT / ".github/workflows/keychain-runbook.yml").read_text()
+    steps = yaml.safe_load(workflow)["jobs"]["phase"]["steps"]
     (run,) = [step["run"] for step in steps if "EXPECT" in step.get("env", {})]
     for leg in _legs():
         assert f"{leg['expect']}:" in run
