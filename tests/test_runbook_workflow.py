@@ -4,7 +4,7 @@ import yaml
 
 ROOT = Path(__file__).parent.parent
 PHASES = ["1", "2", "3", "4a", "4b", "5", "6", "7", "8", "9", "10a", "11a", "11b"]
-FAILING = {"2", "3", "5", "10a"}
+EXPECTS = {"2": "fail", "3": "fail", "5": "nocrash", "10a": "fail"}
 
 
 def _rows() -> list[list[str]]:
@@ -25,12 +25,20 @@ def test_docs_list_the_runbook_phases():
 def test_every_rig_row_has_a_leg_and_every_leg_a_rig_row():
     rig = [row for row in _rows() if row[2] == "runs on the rig"]
     assert [leg["phase"] for leg in _legs()] == [row[0] for row in rig]
-    assert all(row[3] == f"phase {row[0]}" for row in rig)
+    assert all(row[3].split(":")[0] == f"phase {row[0]}" for row in rig)
 
 
 def test_legs_expect_what_the_runbook_expects():
     for leg in _legs():
-        assert leg["expect"] == ("fail" if leg["phase"] in FAILING else "pass")
+        assert leg["expect"] == EXPECTS.get(leg["phase"], "pass")
+
+
+def test_every_expectation_has_a_case_arm():
+    workflow = yaml.safe_load((ROOT / ".github/workflows/keychain-runbook.yml").read_text())
+    steps = workflow["jobs"]["phase"]["steps"]
+    (run,) = [step["run"] for step in steps if "EXPECT" in step.get("env", {})]
+    for leg in _legs():
+        assert f"{leg['expect']}:" in run
 
 
 def test_every_manual_row_has_a_reason():

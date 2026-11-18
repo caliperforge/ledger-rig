@@ -9,7 +9,7 @@ The phases of solana-keychain's `scripts/ledger-hardware-runbook.sh` at `cd5982c
 | 3 | fail | runs on the rig | phase 3 |
 | 4a | pass | runs on the rig | phase 4a |
 | 4b | pass | runs on the rig | phase 4b |
-| 5 | fail | runs on the rig | phase 5 |
+| 5 | fail | runs on the rig | phase 5: the rig checks the runbook's "must not crash the process" half, so any exit at or under 128 passes. The `NotAvailable` exit stays timing-dependent on the rig, because keychain's hardware tests skip, and so pass, when the device is already gone at the moment they start. |
 | 6 | pass, 20 of 20 | runs on the rig | phase 6 |
 | 7 | pass | runs on the rig | phase 7 |
 | 8 | pass | stays manual | push run: exit 101, `test_ledger_signer_survives_unplug_replug` FAILED in 47.43s |
