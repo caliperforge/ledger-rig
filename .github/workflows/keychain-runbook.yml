@@ -71,11 +71,10 @@ jobs:
             4b) recipe rust-ledger-open-app; set -- rust-test-ledger ;;
             *) set -- rust-test-ledger ;;
           esac
-          size=$(stat -c %s /tmp/ledger-rig/bridge-0000.log)
           case $PHASE in
             1 | 4b) press approve approve > driver.log 2>&1 & ;;
             3) rig hold 0000 > driver.log 2>&1 & ;;
-            5) { until [ "$(stat -c %s /tmp/ledger-rig/bridge-0000.log)" -gt "$size" ]; do sleep 0.1; done; restart; } > driver.log 2>&1 & ;;
+            5) { until grep -qs 'test_ledger_sign_offchain_message \.\.\.' phase.log; do sleep 1; done; restart; } > driver.log 2>&1 & ;;
             7) press reject approve > driver.log 2>&1 & ;;
             9) { until grep -qs 'You may now REJECT' phase.log; do sleep 1; done; press reject; } > driver.log 2>&1 & ;;
           esac
