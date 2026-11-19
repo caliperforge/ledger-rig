@@ -192,11 +192,16 @@ async fn scenario_e(run: &Run) -> Result<(), Failure> {
     let signer = connect(Some(&run.hidraw[0]))?;
     let key = read(&signer).await.map_err(|e| e.at(1))?;
     check(run, 1, 0, &key)?;
-    if !signer.is_available().await {
-        return Err(Failure {
-            error: "read 2: signer unavailable".to_string(),
-            detail: BUSY_INFERRED.to_string(),
-        });
+    for i in 2..=READS {
+        if !signer.is_available().await {
+            return Err(Failure {
+                error: format!("read {i}: signer unavailable"),
+                detail: BUSY_INFERRED.to_string(),
+            });
+        }
+        if i % 2 == 1 {
+            check(run, i, 0, &signer.pubkey().to_string())?;
+        }
     }
     Ok(())
 }
