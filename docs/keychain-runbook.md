@@ -2,6 +2,8 @@
 
 The phases of solana-keychain's `scripts/ledger-hardware-runbook.sh` at `cd5982c`, and which of them `.github/workflows/keychain-runbook.yml` runs.
 
+Green workflow_dispatch run on main: https://github.com/caliperforge/ledger-rig/actions/runs/44526766290 (commit `d7ee77fa`).
+
 | phase | runbook expects | rig | job or reason |
 |---|---|---|---|
 | 1 | pass | runs on the rig | phase 1 |
