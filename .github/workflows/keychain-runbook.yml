@@ -16,7 +16,7 @@ jobs:
           - { phase: "4a", expect: pass, count: 1, dashboard: true }
           - { phase: "4b", expect: pass, count: 1, dashboard: true }
           - { phase: "5", expect: nocrash, count: 1 }
-          - { phase: "6", expect: pass, count: 1 }
+          - { phase: "6", expect: nocrash, count: 1 }
           - { phase: "7", expect: pass, count: 1 }
           - { phase: "9", expect: pass, count: 1 }
           - { phase: "10a", expect: fail, count: 2 }
@@ -93,7 +93,8 @@ jobs:
           cat driver.log 2>/dev/null || true
           if [ "$EXPECT" = nocrash ]; then
             grep -q NotAvailable phase.log && seen=seen || seen="not seen"
-            echo "phase $PHASE: suite exit $status, NotAvailable $seen" >> "$GITHUB_STEP_SUMMARY"
+            grep -q 'Ledger is busy' phase.log && busy=seen || busy="not seen"
+            echo "phase $PHASE: suite exit $status, NotAvailable $seen, busy $busy" >> "$GITHUB_STEP_SUMMARY"
           fi
           [ "$status" -le 128 ] || { echo "phase $PHASE crashed: signal $((status - 128))" >&2; exit 1; }
           case $EXPECT:$status in

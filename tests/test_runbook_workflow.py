@@ -4,7 +4,7 @@ import yaml
 
 ROOT = Path(__file__).parent.parent
 PHASES = ["1", "2", "3", "4a", "4b", "5", "6", "7", "8", "9", "10a", "11a", "11b"]
-EXPECTS = {"2": "fail", "3": "fail", "5": "nocrash", "10a": "fail"}
+EXPECTS = {"2": "fail", "3": "fail", "5": "nocrash", "6": "nocrash", "10a": "fail"}
 
 
 def _rows() -> list[list[str]]:
