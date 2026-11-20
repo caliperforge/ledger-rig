@@ -92,7 +92,7 @@ pytest
 sudo "$(which python)" -m pytest -m uhid
 ```
 
-[docs/keychain-runbook.md](docs/keychain-runbook.md) marks which phases of solana-keychain's hardware runbook run on the rig.
+[examples/keychain/runbook.md](examples/keychain/runbook.md) marks which phases of solana-keychain's hardware runbook run on the rig.
 
 ## Prior art
 

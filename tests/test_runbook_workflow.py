@@ -8,7 +8,7 @@ EXPECTS = {"2": "fail", "3": "fail", "5": "nocrash", "6": "nocrash", "10a": "fai
 
 
 def _rows() -> list[list[str]]:
-    lines = (ROOT / "docs/keychain-runbook.md").read_text().splitlines()
+    lines = (ROOT / "examples/keychain/runbook.md").read_text().splitlines()
     table = [line for line in lines if line.startswith("|")]
     return [[cell.strip() for cell in line.strip("|").split("|")] for line in table[2:]]
 
