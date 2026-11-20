@@ -177,7 +177,7 @@ jobs:
           echo >> results.md
           jq -rs '
             def busy: .detail // "" | test("Ledger is busy|call 2 of 2 returned false");
-            "| commit | runs | busy A | busy B | busy C | busy D | busy E (2× is_available, 1 device) | other failures |",
+            "| commit | runs | busy A | busy B | busy C | busy D | busy E (50 calls, 1 device) | other failures |",
             "|---|---|---|---|---|---|---|---|",
             (. as $rows | ("cd5982c", "cd5982c+claim", "aa66be2", "aa66be2+claim") as $c
               | ($rows | map(select(.commit == $c and .scenario != "F" and (.pass | not)))) as $f

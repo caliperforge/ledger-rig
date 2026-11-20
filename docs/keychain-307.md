@@ -7,6 +7,7 @@ Scenarios from dev-jodee's review of #358, run by `.github/workflows/keychain-30
 - B: as A, with bridge `0001` killed and respawned before read 26; no read returns the other device's key.
 - C: bridge `0001` killed, an unnamed signer connects (key `0000`), bridge respawned, a signer held on `0001`, then 50 reads alternating the unnamed signer's `is_available` and a `0001` read.
 - D: a signer held on `0000` reads its key, a second signer connects on `0001`, then `0000` is read again at once; that read returns key `0000` with no error.
+- E: a signer held on `0000`, then 50 back-to-back calls alternating a `0000` read and `is_available()`; every read returns key `0000` and every `is_available()` returns true.
 
 ## Commands
 
