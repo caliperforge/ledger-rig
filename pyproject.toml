@@ -4,8 +4,25 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ledger-rig"
-version = "0.1.0"
+version = "0.2.0"
+description = "Speculos Solana Ledger Nano S Plus devices as Linux hidraw devices, for CI"
 requires-python = ">=3.11"
+license = "MIT"
+license-files = ["LICENSE"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Software Development :: Testing",
+]
+
+[project.urls]
+Homepage = "https://github.com/caliperforge/ledger-rig"
+Source = "https://github.com/caliperforge/ledger-rig"
+Changelog = "https://github.com/caliperforge/ledger-rig/blob/main/CHANGELOG.md"
+Issues = "https://github.com/caliperforge/ledger-rig/issues"
 
 [project.optional-dependencies]
 test = ["pytest", "ruff", "hid", "pyyaml"]
