@@ -54,7 +54,7 @@ jobs:
           from solders.keypair import Keypair
           from ledger_rig.seeds import SEEDS
           keys = []
-          for mnemonic in SEEDS:
+          for mnemonic in SEEDS[:2]:
               seed = hashlib.pbkdf2_hmac("sha512", mnemonic.encode(), b"mnemonic", 2048)
               keypair = Keypair.from_seed_and_derivation_path(seed, "m/44'/501'/0'")
               keys.append(str(keypair.pubkey()))

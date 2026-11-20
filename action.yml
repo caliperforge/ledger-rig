@@ -2,7 +2,7 @@ name: ledger-rig
 description: Brings up Speculos Solana Ledger Nano S Plus devices as hidraw devices
 inputs:
   count:
-    description: Number of devices, at most 2
+    description: Number of devices, at most 8
     required: true
   app-tag:
     description: app-solana commit the ELF is built from

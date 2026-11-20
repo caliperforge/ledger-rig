@@ -81,7 +81,7 @@ sudo python -m ledger_rig hold 0001 --every 2
 
 - Linux only, with root for uhid
 - hidraw behaviour only, not USB descriptors or macOS IOKit
-- At most 2 devices
+- At most 8 devices
 - Nano S Plus only
 - Dashboard mode emulates only the hidraw path change on app launch, not the USB PID change
 
